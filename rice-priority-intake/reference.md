@@ -66,7 +66,7 @@ Feature RICE is the reference band. Scale Task RICE only for within-Task sorting
 | `Parent_links` | optional | yes |
 | `Blocks`, `Blocked_by`, `Ledger_ref`, `Notes` | yes | yes |
 
-**排期不在 items 行** — 所有 `start_date` / `end_date` 只写在 `.executions.csv`。
+**Schedule is not on item rows** — all `start_date` / `end_date` live only in `.executions.csv`.
 
 ### Forbidden in csv/md
 
@@ -76,7 +76,7 @@ Feature RICE is the reference band. Scale Task RICE only for within-Task sorting
 
 | Input | Linked task `effort` | build calendar |
 | --- | --- | --- |
-| neither date | — | 未排期 |
+| neither date | — | Unscheduled |
 | `start_date` only | required | range: start … start+N−1 days |
 | `end_date` only | optional | milestone, or range if Effort set |
 | both dates | — | **invalid** |
@@ -89,8 +89,8 @@ Dates: `YYYY-MM-DD`. Span uses **natural days** from linked item's parsed `Effor
 
 ```csv
 id,task_id,start_date,end_date,start_time,end_time,status,notes
-EXEC-001,RICE-TASK-005,2026-07-01,,09:00,,pending,首次排期
-EXEC-002,RICE-TASK-005,2026-07-08T14:30,,,,pending,重试
+EXEC-001,RICE-TASK-005,2026-07-01,,09:00,,pending,Initial schedule
+EXEC-002,RICE-TASK-005,2026-07-08T14:30,,,,pending,Retry after integration
 ```
 
 | Column | Required | Notes |
@@ -114,15 +114,15 @@ All files live under **`docs/backlog/`** at the workspace root (unless the user 
 ```markdown
 # Priority Intake Backlog
 
-> 仅原始数据。Items 见同目录 `priority-intake-backlog.items.csv`；多次执行见 `priority-intake-backlog.executions.csv`；排序 / 分数 / 日历请 build 后打开 .html
+> Raw data only. Items live in `priority-intake-backlog.items.csv` in the same directory; multiple runs in `priority-intake-backlog.executions.csv`. Open the built .html for ranking, scores, and calendar.
 
-## 已确认决策
+## Confirmed decisions
 
-| # | 决策 |
+| # | Decision |
 | --- | --- |
 | 1 | … |
 
-**实施顺序**：…
+**Implementation order**: …
 ```
 
 **`docs/backlog/priority-intake-backlog.items.csv`** — one row per item (UTF-8 with BOM for Excel):
@@ -170,7 +170,7 @@ When `parent_links` is non-empty, **do not** re-interview full Reach/Impact on t
 | --- | --- | --- | --- |
 | Single parent 100% | `Reach(P) × 1` | `Impact(P) × 1 × slice` | 1 if only child; else Σ slice ≤ 1 across siblings |
 | Multi-parent Σai=100% | `Σ Reach(Pi) × ai%` | `Σ Impact(Pi) × ai% × slice` | Usually 1 (value split is in ai%) |
-| Sibling Tasks, same parent | Inherit parent Reach满额 | `Impact(P) × slice` per sibling | Σ slice ≤ 1 per parent |
+| Sibling Tasks, same parent | Inherit parent Reach full | `Impact(P) × slice` per sibling | Σ slice ≤ 1 per parent |
 
 ```
 function inherited_reach(child):
@@ -269,7 +269,7 @@ intake → ready → in-progress → done
 | --- | --- |
 | Double-counting effort on each parent | Effort once on leaf only |
 | 100% attribution to two parents | Splits must sum to 100% |
-| Child Task re-estimates same满额 Reach as parent | Inherit `Reach(P) × ai%` |
+| Child Task re-estimates same full Reach as parent | Inherit `Reach(P) × ai%` |
 | Sibling Tasks each inherit full parent Impact | Assign `impact_slice`; Σ slice ≤ 1 per parent |
 | Compare Task standalone RICE to Story standalone RICE | Use `Score` in Summary; raw RICE only within Task level |
 | Display raw RICE in Summary when children exist | Show `Score` (= norm×100); raw RICE in item detail |

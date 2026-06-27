@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -248,15 +248,15 @@
         <p>__SOURCE__ · __GENERATED_AT__</p>
       </div>
       <div class="tabs" role="tablist">
-        <button class="tab active" data-view="flow" type="button">流程图</button>
-        <button class="tab" data-view="rank" type="button">优先级</button>
-        <button class="tab" data-view="board" type="button">看板</button>
-        <button class="tab" data-view="calendar" type="button">日历</button>
-        <button class="tab" data-view="decisions" type="button">决策</button>
+        <button class="tab active" data-view="flow" type="button">Flow</button>
+        <button class="tab" data-view="rank" type="button">Priority</button>
+        <button class="tab" data-view="board" type="button">Board</button>
+        <button class="tab" data-view="calendar" type="button">Calendar</button>
+        <button class="tab" data-view="decisions" type="button">Decisions</button>
       </div>
       <div class="toolbar">
-        <select id="filter-level"><option value="">全部层级</option><option>Epic</option><option>Feature</option><option>Story</option><option>Task</option></select>
-        <input type="search" id="search" placeholder="搜索…" />
+        <select id="filter-level"><option value="">All levels</option><option>Epic</option><option>Feature</option><option>Story</option><option>Task</option></select>
+        <input type="search" id="search" placeholder="Search…" />
       </div>
     </header>
     <main class="main">
@@ -269,22 +269,22 @@
             </div>
           </div>
           <div class="legend">
-            <div><span class="line"></span> 父子层级</div>
-            <div><span class="line block"></span> 阻塞 (blocks)</div>
-            <div><span class="line blocked"></span> 被阻塞 (blocked_by)</div>
-            <div style="margin-top:8px;color:#94a3b8">拖节点移动 · 拖空白平移画布</div>
+            <div><span class="line"></span> Parent hierarchy</div>
+            <div><span class="line block"></span> Blocks</div>
+            <div><span class="line blocked"></span> Blocked by</div>
+            <div style="margin-top:8px;color:#94a3b8">Drag nodes to move · drag canvas to pan</div>
           </div>
           <div class="flow-controls">
-            <button type="button" id="zoom-in" title="放大">+</button>
-            <button type="button" id="zoom-out" title="缩小">−</button>
-            <button type="button" id="zoom-fit" title="适应画布">◎</button>
-            <button type="button" id="layout-reset" title="重新布局">↻</button>
+            <button type="button" id="zoom-in" title="Zoom in">+</button>
+            <button type="button" id="zoom-out" title="Zoom out">−</button>
+            <button type="button" id="zoom-fit" title="Fit to canvas">◎</button>
+            <button type="button" id="layout-reset" title="Reset layout">↻</button>
           </div>
         </div>
       </section>
       <section class="view" id="view-rank">
         <div class="rank-wrap">
-          <table><thead><tr><th>#</th><th>ID</th><th>标题</th><th>层级</th><th>分数</th><th>状态</th><th>父级</th></tr></thead><tbody id="rank-body"></tbody></table>
+          <table><thead><tr><th>#</th><th>ID</th><th>Title</th><th>Level</th><th>Score</th><th>Status</th><th>Parents</th></tr></thead><tbody id="rank-body"></tbody></table>
         </div>
       </section>
       <section class="view" id="view-board">
@@ -296,11 +296,11 @@
             <button type="button" id="cal-prev">‹</button>
             <h2 id="cal-title"></h2>
             <button type="button" id="cal-next">›</button>
-            <button type="button" id="cal-today">今天</button>
+            <button type="button" id="cal-today">Today</button>
           </div>
           <div class="cal-grid" id="cal-grid"></div>
           <div class="cal-unscheduled">
-            <h3 id="cal-unsched-title">未排期</h3>
+            <h3 id="cal-unsched-title">Unscheduled</h3>
             <ul id="cal-unsched-list"></ul>
           </div>
         </div>
@@ -325,11 +325,11 @@
     const DATA = __DATA_JSON__;
     const LEVEL_COLOR = { Epic: 'var(--epic)', Feature: 'var(--feature)', Story: 'var(--story)', Task: 'var(--task)' };
     const BOARD_COLS = [
-      { key: 'ready', label: '可开工' },
-      { key: 'in-progress', label: '进行中' },
-      { key: 'intake', label: '待评估' },
-      { key: 'deferred', label: '暂缓' },
-      { key: 'done', label: '完成' },
+      { key: 'ready', label: 'Ready' },
+      { key: 'in-progress', label: 'In progress' },
+      { key: 'intake', label: 'Intake' },
+      { key: 'deferred', label: 'Deferred' },
+      { key: 'done', label: 'Done' },
     ];
 
     let filtered = [...DATA.items];
@@ -337,7 +337,7 @@
     const calNow = new Date();
     let calYear = calNow.getFullYear();
     let calMonth = calNow.getMonth();
-    const CAL_MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     let scale = 1;
     let panX = 40;
     let panY = 40;
@@ -660,8 +660,8 @@
             <div class="board-card" data-id="${item.id}">
               <div class="mono">${item.id}</div>
               <div class="title">${item.title}</div>
-              <div>${levelBadge(item.level)} <span class="rice">分数 ${formatScore(item.rice)}</span></div>
-            </div>`).join('') || '<div style="color:var(--muted);font-size:0.85rem">无</div>'}
+              <div>${levelBadge(item.level)} <span class="rice">Score ${formatScore(item.rice)}</span></div>
+            </div>`).join('') || '<div style="color:var(--muted);font-size:0.85rem">None</div>'}
           </div></div>`;
       }).join('');
       wrap.querySelectorAll('.board-card').forEach(el => el.addEventListener('click', () => openDrawer(el.dataset.id)));
@@ -669,14 +669,14 @@
 
     function renderDecisions() {
       const list = document.getElementById('decision-list');
-      list.innerHTML = (DATA.decisions || []).map(d => `<li>${d}</li>`).join('') || '<li>暂无决策记录</li>';
+      list.innerHTML = (DATA.decisions || []).map(d => `<li>${d}</li>`).join('') || '<li>No decisions recorded</li>';
       document.getElementById('order-note').textContent = DATA.implementationOrder || '';
     }
 
     function scheduleLabel(sch) {
-      if (!sch || sch.mode === 'none') return '未排期';
-      if (sch.mode === 'invalid') return `<span class="warn">排期无效：${sch.schedule_error || ''}</span>`;
-      if (sch.mode === 'milestone') return `截止 ${sch.end}`;
+      if (!sch || sch.mode === 'none') return 'Unscheduled';
+      if (sch.mode === 'invalid') return `<span class="warn">Invalid schedule: ${sch.schedule_error || ''}</span>`;
+      if (sch.mode === 'milestone') return `Due ${sch.end}`;
       return `${sch.start} → ${sch.end}`;
     }
 
@@ -690,10 +690,10 @@
           <td>${ex.status || '—'}</td>
           <td>${ex.notes || '—'}</td>
         </tr>`).join('')
-        : '<tr><td colspan="4" style="color:var(--muted)">无 — 在 .executions.csv 添加行</td></tr>';
+        : '<tr><td colspan="4" style="color:var(--muted)">None — add rows in .executions.csv</td></tr>';
       return `<div class="executions-box">
-        <strong>执行 / 排期</strong>（<code>.executions.csv</code>）
-        <table class="exec-table"><thead><tr><th>ID</th><th>排期</th><th>状态</th><th>备注</th></tr></thead><tbody>${body}</tbody></table>
+        <strong>Executions / schedule</strong> (<code>.executions.csv</code>)
+        <table class="exec-table"><thead><tr><th>ID</th><th>Schedule</th><th>Status</th><th>Notes</th></tr></thead><tbody>${body}</tbody></table>
       </div>`;
     }
 
@@ -709,19 +709,19 @@
       const contribs = (item.contributions || []).map(c => `${c.parent_id} ${c.pct}% → ${c.rice}`).join('<br>') || '—';
       document.getElementById('drawer-body').innerHTML = `
         <div style="margin-bottom:12px">${levelBadge(item.level)} ${statusBadge(item.status)}
-          <strong style="margin-left:8px;font-size:1.2rem">分数 ${formatScore(item.rice)}</strong></div>
+          <strong style="margin-left:8px;font-size:1.2rem">Score ${formatScore(item.rice)}</strong></div>
         <div class="computed-box">
-          <div><strong>计算</strong>（build 生成，不在 md 中）</div>
+          <div><strong>Computed</strong> (build output — not in md)</div>
           <div>Reach ${c.reach ?? '—'} · Impact ${c.impact ?? '—'}</div>
           <div>RICE raw ${item.rice_raw ?? '—'} · norm ${item.rice_norm ?? '—'}</div>
           <div>Effective RICE ${item.effective_rice ?? '—'}</div>
-          <div style="margin-top:6px;font-size:0.8rem">Rollup：<br>${contribs}</div>
+          <div style="margin-top:6px;font-size:0.8rem">Rollup:<br>${contribs}</div>
         </div>
         ${executionsHtml(item)}
         <div class="kv">
-          <span class="k">父级归因</span><span>${item.parents}</span>
-          <span class="k">阻塞</span><span>${item.blocks}</span>
-          <span class="k">被阻塞</span><span>${item.blocked_by}</span>
+          <span class="k">Parent attribution</span><span>${item.parents}</span>
+          <span class="k">Blocks</span><span>${item.blocks}</span>
+          <span class="k">Blocked by</span><span>${item.blocked_by}</span>
           <span class="k">Ledger</span><span>${item.ledger_ref}</span>
           ${fields.map(([k,v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}
         </div>
@@ -756,9 +756,9 @@
     }
 
     function renderCalendar() {
-      document.getElementById('cal-title').textContent = `${calYear}年${CAL_MONTHS[calMonth]}`;
+      document.getElementById('cal-title').textContent = `${CAL_MONTHS[calMonth]} ${calYear}`;
       const grid = document.getElementById('cal-grid');
-      const dows = ['日','一','二','三','四','五','六'];
+      const dows = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
       let html = dows.map(d => `<div class="cal-dow">${d}</div>`).join('');
 
       const first = new Date(calYear, calMonth, 1);
@@ -812,10 +812,10 @@
       grid.querySelectorAll('.cal-chip').forEach(el => el.addEventListener('click', () => openDrawer(el.dataset.id)));
 
       const unsched = filtered.filter(i => !(i.calendar_slots || []).length);
-      document.getElementById('cal-unsched-title').textContent = `未排期 (${unsched.length})`;
+      document.getElementById('cal-unsched-title').textContent = `Unscheduled (${unsched.length})`;
       document.getElementById('cal-unsched-list').innerHTML = unsched.map(item =>
-        `<li data-id="${item.id}"><span class="mono">${item.id}</span> ${item.title} · 分数 ${formatScore(item.rice)}</li>`
-      ).join('') || '<li style="color:var(--muted)">无</li>';
+        `<li data-id="${item.id}"><span class="mono">${item.id}</span> ${item.title} · Score ${formatScore(item.rice)}</li>`
+      ).join('') || '<li style="color:var(--muted)">None</li>';
       document.getElementById('cal-unsched-list').querySelectorAll('li[data-id]').forEach(el =>
         el.addEventListener('click', () => openDrawer(el.dataset.id)));
     }

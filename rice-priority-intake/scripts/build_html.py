@@ -284,7 +284,7 @@ def resolve_schedule(fields: dict) -> dict:
             "start_time": start_time,
             "end_time": end_time,
             "effort_days": effort_days or None,
-            "schedule_error": "不能同时填写 start_date 与 end_date",
+            "schedule_error": "Cannot set both start_date and end_date",
         }
     if start:
         if span == 0:
@@ -295,7 +295,7 @@ def resolve_schedule(fields: dict) -> dict:
                 "start_time": start_time,
                 "end_time": end_time,
                 "effort_days": None,
-                "schedule_error": "有 start_date 时必须可解析 Effort（至少 0.5 person-day）",
+                "schedule_error": "start_date requires parseable Effort (at least 0.5 person-day)",
             }
         cal_end = add_calendar_days(start, span - 1)
         return {
@@ -483,6 +483,22 @@ def run_compute_pipeline(items: list[dict]) -> None:
     compute_rollup(items)
 
 
+DECISION_SECTION_HEADERS = frozenset({
+    "## Confirmed decisions",
+    "## \u5df2\u786e\u8ba4\u51b3\u7b56",  # legacy
+})
+IMPLEMENTATION_ORDER_MARKERS = (
+    "**Implementation order**",
+    "**\u5b9e\u65bd\u987a\u5e8f**",  # legacy
+)
+IMPLEMENTATION_ORDER_PREFIXES = (
+    "**Implementation order**:",
+    "**Implementation order**: ",
+    "**\u5b9e\u65bd\u987a\u5e8f**\uff1a",  # legacy fullwidth colon
+    "**\u5b9e\u65bd\u987a\u5e8f**:",  # legacy
+)
+
+
 def parse_decisions_md(text: str) -> tuple[list[str], str]:
     lines = text.splitlines()
     decisions: list[str] = []
@@ -493,16 +509,19 @@ def parse_decisions_md(text: str) -> tuple[list[str], str]:
     for line in lines:
         stripped = line.strip()
 
-        if stripped == "## 已确认决策":
+        if stripped in DECISION_SECTION_HEADERS:
             in_decisions = True
             decision_cols = []
             continue
 
-        if stripped.startswith("## ") and stripped != "## 已确认决策":
+        if stripped.startswith("## ") and stripped not in DECISION_SECTION_HEADERS:
             in_decisions = False
 
-        if in_decisions and stripped.startswith("**实施顺序**"):
-            implementation_order = stripped.replace("**实施顺序**：", "").replace("**实施顺序**:", "").strip()
+        if in_decisions and any(stripped.startswith(m) for m in IMPLEMENTATION_ORDER_MARKERS):
+            for prefix in IMPLEMENTATION_ORDER_PREFIXES:
+                if stripped.startswith(prefix):
+                    implementation_order = stripped[len(prefix):].strip()
+                    break
             continue
 
         if in_decisions and DECISION_HEADER.match(stripped):
