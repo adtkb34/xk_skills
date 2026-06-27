@@ -10,21 +10,14 @@ Initial release.
 
 ### Added
 
-- RICE priority intake skill: confirm-first workflow, one request → one backlog item by default.
-- Backlog artifacts under `docs/backlog/`: `.md` (decisions), `.items.csv`, `.executions.csv`, generated `.html`.
+- Confirm-first RICE priority intake: one user request → one backlog item by default.
+- Backlog layout under `docs/backlog/`: `.md` (decisions only), `.items.csv`, `.executions.csv`, generated `.html`.
 - `build_html.py`: RICE / Score / Summary, flow chart, kanban, calendar, multi-parent attribution rollup.
-- `build_html.py --serve`: local dashboard editor with CSV save (`backlog_server.py`).
-- HTML UI: Tom Select, Flatpickr, Treeselect (parent tree); add items and executions from the browser.
-- Effort schema: numeric **days** in CSV; UI accepts days / weeks / months with level-based defaults (7 days/week, 30 days/month).
-
-### Changed
-
-- Skill docs and dashboard UI are English-only.
-- `build_html` accepts a backlog **directory** only (not a `.md` file path).
-- Calendar chips show `time + title` with CSS ellipsis overflow.
-
-### Removed
-
-- Backward-compatibility paths: items-in-md parsing, Chinese md headers, `person-*` effort strings, legacy effort unit parsing.
+- `build_html.py --serve` and `backlog_server.py`: browser editor that saves items and executions to CSV.
+- Dashboard form widgets: Tom Select, Flatpickr, Treeselect parent tree.
+- Effort model: numeric **days** in CSV; UI input in days / weeks / months with level-based defaults (7 days/week, 30 days/month).
+- English-only skill docs and dashboard UI.
+- Directory-only CLI: `build_html.py docs/backlog` (not a `.md` file path).
+- Calendar chips: `time + title` on one line, CSS ellipsis when overflow.
 
 [1.0.0]: https://github.com/adtkb34/xk_skills/releases/tag/v1.0.0
