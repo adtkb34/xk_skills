@@ -53,7 +53,7 @@ Feature RICE is the reference band. Scale Task RICE only for within-Task sorting
 
 ## Raw backlog schema
 
-**`priority-intake-backlog.md` stores human-editable inputs only.** `build_html.py` computes RICE, Score, Summary, calendar spans, rollup.
+**`priority-intake-backlog.md`** holds decisions; **`priority-intake-backlog.items.csv`** holds item rows (human-editable inputs only). `build_html.py` computes RICE, Score, Summary, calendar spans, rollup.
 
 ### Allowed fields
 
@@ -67,7 +67,7 @@ Feature RICE is the reference band. Scale Task RICE only for within-Task sorting
 | `start_date` / `end_date` | optional | optional |
 | `Blocks`, `Blocked_by`, `Ledger_ref`, `Notes` | yes | yes |
 
-### Forbidden in md
+### Forbidden in csv/md
 
 `RICE`, `RICE_norm`, `Score`, `Effective_RICE`, `Reach_source`, `Impact_source`, `## Summary` table.
 
@@ -84,10 +84,12 @@ Dates: `YYYY-MM-DD`. Span uses **natural days** from parsed `Effort`.
 
 ## Backlog file template
 
+**`priority-intake-backlog.md`** — decisions only:
+
 ```markdown
 # Priority Intake Backlog
 
-> 仅原始数据。排序 / 分数 / 日历请 build 后打开 .html
+> 仅原始数据。Items 见同目录 `priority-intake-backlog.items.csv`；排序 / 分数 / 日历请 build 后打开 .html
 
 ## 已确认决策
 
@@ -96,68 +98,32 @@ Dates: `YYYY-MM-DD`. Span uses **natural days** from parsed `Effort`.
 | 1 | … |
 
 **实施顺序**：…
-
-## Items
-
-### RICE-STORY-001 — [Title]
-
-| Field | Value |
-| --- | --- |
-| Level | Story |
-| Status | ready |
-| Reach | 120 |
-| Impact | 2 |
-| Confidence | 80% |
-| Effort | 6 person-days |
-| Parent_links | — |
-| start_date | — |
-| end_date | — |
-| Blocks | — |
-| Blocked_by | — |
-| Ledger_ref | — |
-| Notes | … |
-
----
-
-### RICE-TASK-NNN — [Title]
-
-| Field | Value |
-| --- | --- |
-| Level | Task |
-| Status | ready |
-| Confidence | 90% |
-| Effort | 2 person-days |
-| impact_slice | 0.4 |
-| Parent_links | RICE-STORY-001:100% |
-| start_date | 2026-07-01 |
-| end_date | — |
-| Blocks | — |
-| Blocked_by | — |
-| Ledger_ref | — |
-| Notes | … |
-
----
 ```
 
-## Row template (quick append — child Task)
+**`priority-intake-backlog.items.csv`** — one row per item (UTF-8 with BOM for Excel):
 
-```markdown
-### RICE-TASK-NNN — Title
+```csv
+id,title,level,status,reach,impact,confidence,effort,impact_slice,parent_links,start_date,end_date,blocks,blocked_by,ledger_ref,notes
+RICE-STORY-001,Title,Story,ready,120,2,80%,6 person-days,,,,,,,,"Notes…"
+RICE-TASK-NNN,Child task,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,2026-07-01,,,,,"Notes…"
+```
 
-| Field | Value |
-| --- | --- |
-| Level | Task |
-| Status | intake |
-| Confidence | 80% |
-| Effort | 3 person-days |
-| impact_slice | 0.4 |
-| Parent_links | RICE-STORY-001:100% |
-| start_date | — |
-| end_date | — |
-| Blocks | — |
-| Blocked_by | — |
-| Ledger_ref | — |
-| Notes | … |
+| Column | Root | Child (`parent_links`) |
+| --- | --- | --- |
+| `id`, `title`, `level`, `status` | required | required |
+| `reach`, `impact` | yes | leave empty (inherited) |
+| `confidence`, `effort` | yes | yes |
+| `impact_slice` | empty | yes when siblings share parent |
+| `parent_links` | empty | e.g. `RICE-STORY-001:100%` |
+| `start_date` / `end_date` | optional | optional (only one) |
+| `blocks`, `blocked_by`, `ledger_ref`, `notes` | optional | optional |
+
+Empty cell = not set. Quote `notes` when it contains commas.
+
+## Row template (quick append — child Task CSV line)
+
+```csv
+RICE-TASK-NNN,Title,Task,intake,,,80%,3 person-days,0.4,RICE-STORY-001:100%,,,,,,"Notes…"
 ```
 
 ## Attributed inheritance scoring

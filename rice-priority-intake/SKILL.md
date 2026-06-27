@@ -28,11 +28,12 @@ Do **not** replace Skill 104 prompt refinement. RICE decides **order**; Skill 10
 
 | File | Purpose |
 | --- | --- |
-| `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.md` | **原始数据** — 人可手改；仅存访谈输入，**不含**计算列 |
+| `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.md` | **决策** — 已确认决策、实施顺序 |
+| `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.items.csv` | **原始数据** — Items 表格（一行一条）；仅存访谈输入，**不含**计算列 |
 | `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.html` | **计算视图** — build 生成：Score、Summary、日历、rollup |
 | `projects/<slug>/.ai-factory/00-intake/core-feature-ledger.md` | P0/P1 truth; sync Priority column from RICE rank |
 
-Create `priority-intake-backlog.md` on first intake if missing. Use the template in [reference.md](reference.md).
+Create `priority-intake-backlog.md` and `priority-intake-backlog.items.csv` on first intake if missing. Use templates in [reference.md](reference.md).
 
 **维护规则**：只改 `.md`（原始字段）；改完后运行 `build_html.py` 刷新 HTML。**禁止**在 md 写入 RICE/Score/Summary；**禁止**手改 `.html`。
 
@@ -40,7 +41,7 @@ Create `priority-intake-backlog.md` on first intake if missing. Use the template
 
 **看有哪些任务**
 
-1. **Markdown（源文件）** — `## Items` 为每条原始字段；**无 Summary 表**。
+1. **CSV + Markdown（源文件）** — `.items.csv` 为 Items 表格；`.md` 为决策；**无 Summary 表**。
 2. **HTML（推荐浏览）** — `priority-intake-backlog.html`：**流程图**、**优先级**（build 生成 Summary）、**看板**、**日历**、**决策**；点击打开详情抽屉（含计算区）。
 
 **生成 HTML**
@@ -224,13 +225,13 @@ All of Step 4–4.5 runs in **`build_html.py`** and intake chat replies — **ne
 
 ### Step 5: Write backlog row (raw only)
 
-Append to `priority-intake-backlog.md` using [reference.md](reference.md) template.
+Append one CSV row to `priority-intake-backlog.items.csv` using [reference.md](reference.md) column template. Update decisions in `.md` when needed.
 
 **Root item** (no `parent_links`): `Level`, `Status`, `Reach`, `Impact`, `Confidence`, `Effort`, `Blocks`, `Blocked_by`, `Ledger_ref`, `Notes`, optional `start_date` or `end_date`.
 
 **Child item** (has `parent_links`): `Level`, `Status`, `Confidence`, `Effort`, `impact_slice`, `Parent_links`, `Blocks`, `Blocked_by`, `Notes`, optional schedule — **omit** `Reach`/`Impact`.
 
-**Forbidden in md**: `RICE`, `RICE_norm`, `Score`, `Effective_RICE`, `Reach_source`, `Impact_source`, `## Summary` table.
+**Forbidden in csv/md**: `RICE`, `RICE_norm`, `Score`, `Effective_RICE`, `Reach_source`, `Impact_source`, `## Summary` table.
 
 ID pattern: `RICE-<LEVEL>-<NNN>`.
 

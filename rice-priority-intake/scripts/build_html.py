@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build a readable HTML dashboard from priority-intake-backlog.md (raw fields only)."""
+"""Build a readable HTML dashboard from priority-intake-backlog (md + items csv)."""
 
 from __future__ import annotations
 
 import argparse
+import csv
 import html
 import json
 import re
@@ -23,6 +24,68 @@ TEMPLATE_PATH = Path(__file__).with_name("backlog-dashboard.template.html")
 COMPUTED_MD_FIELDS = frozenset({
     "RICE", "RICE_norm", "Score", "Effective_RICE", "Reach_source", "Impact_source",
 })
+
+ITEMS_CSV_SUFFIX = ".items.csv"
+
+# CSV header (lowercase) → internal field key used by compute pipeline
+CSV_FIELD_MAP = {
+    "level": "Level",
+    "status": "Status",
+    "reach": "Reach",
+    "impact": "Impact",
+    "confidence": "Confidence",
+    "effort": "Effort",
+    "impact_slice": "impact_slice",
+    "parent_links": "Parent_links",
+    "start_date": "start_date",
+    "end_date": "end_date",
+    "blocks": "Blocks",
+    "blocked_by": "Blocked_by",
+    "ledger_ref": "Ledger_ref",
+    "notes": "Notes",
+}
+
+
+def items_csv_path(md_path: Path) -> Path:
+    return md_path.with_name(f"{md_path.stem}{ITEMS_CSV_SUFFIX}")
+
+
+def normalize_cell(val: str | None) -> str:
+    if val is None:
+        return ""
+    v = val.strip()
+    if v in ("—", "-", "–"):
+        return ""
+    return v
+
+
+def row_to_fields(row: dict[str, str]) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for csv_key, field_key in CSV_FIELD_MAP.items():
+        val = normalize_cell(row.get(csv_key, ""))
+        if val:
+            fields[field_key] = val
+    return fields
+
+
+def parse_items_csv(csv_path: Path) -> list[dict]:
+    text = csv_path.read_text(encoding="utf-8-sig")
+    reader = csv.DictReader(text.splitlines())
+    if not reader.fieldnames:
+        raise ValueError(f"CSV has no header row: {csv_path}")
+
+    items: list[dict] = []
+    for row in reader:
+        item_id = normalize_cell(row.get("id", ""))
+        title = normalize_cell(row.get("title", ""))
+        if not item_id:
+            continue
+        items.append({
+            "id": item_id,
+            "title": title,
+            "fields": row_to_fields(row),
+        })
+    return items
 
 
 def parse_markdown_table_row(line: str) -> tuple[str, str] | None:
@@ -312,28 +375,14 @@ def run_compute_pipeline(items: list[dict]) -> None:
         item["schedule"] = resolve_schedule(item["fields"])
 
 
-def parse_backlog(text: str) -> dict:
+def parse_decisions_md(text: str) -> tuple[list[str], str]:
     lines = text.splitlines()
-    items: list[dict] = []
     decisions: list[str] = []
     implementation_order = ""
-    current: dict | None = None
     in_decisions = False
     decision_cols: list[str] = []
 
     for line in lines:
-        header = ITEM_HEADER.match(line.strip())
-        if header:
-            if current:
-                items.append(current)
-            current = {
-                "id": header.group(1),
-                "title": header.group(2).strip(),
-                "fields": {},
-            }
-            in_decisions = False
-            continue
-
         stripped = line.strip()
 
         if stripped == "## 已确认决策":
@@ -359,15 +408,47 @@ def parse_backlog(text: str) -> dict:
                 if len(cells) > 2 and cells[2]:
                     decision_text = f"{decision_text} — {cells[2]}"
                 decisions.append(decision_text)
+
+    return decisions, implementation_order
+
+
+def parse_items_md_legacy(text: str) -> list[dict]:
+    """Legacy: ### RICE-… — title + per-item Field|Value tables."""
+    lines = text.splitlines()
+    items: list[dict] = []
+    current: dict | None = None
+
+    for line in lines:
+        header = ITEM_HEADER.match(line.strip())
+        if header:
+            if current:
+                items.append(current)
+            current = {
+                "id": header.group(1),
+                "title": header.group(2).strip(),
+                "fields": {},
+            }
             continue
 
-        if current and stripped.startswith("|"):
+        if current and line.strip().startswith("|"):
             row = parse_markdown_table_row(line)
             if row and row[0] not in COMPUTED_MD_FIELDS:
                 current["fields"][row[0]] = row[1]
 
     if current:
         items.append(current)
+    return items
+
+
+def parse_backlog(md_path: Path) -> dict:
+    text = md_path.read_text(encoding="utf-8")
+    decisions, implementation_order = parse_decisions_md(text)
+
+    csv_path = items_csv_path(md_path)
+    if csv_path.is_file():
+        items = parse_items_csv(csv_path)
+    else:
+        items = parse_items_md_legacy(text)
 
     run_compute_pipeline(items)
     summary_rows = build_summary(items)
@@ -408,11 +489,16 @@ def main() -> int:
         print(f"Error: file not found: {args.input}", file=sys.stderr)
         return 1
 
-    text = args.input.read_text(encoding="utf-8")
-    data = parse_backlog(text)
+    data = parse_backlog(args.input)
     out = args.output or args.input.with_suffix(".html")
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    out.write_text(render_html(data, args.input.resolve(), generated_at), encoding="utf-8")
+    csv_path = items_csv_path(args.input)
+    source_label = (
+        f"{args.input.name} + {csv_path.name}"
+        if csv_path.is_file()
+        else args.input.name
+    )
+    out.write_text(render_html(data, Path(source_label), generated_at), encoding="utf-8")
     print(f"Wrote {out} ({len(data['items'])} items)")
     return 0
 

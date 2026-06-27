@@ -28,17 +28,10 @@
 | start_date | 2026-07-01 |
 | Blocked by | — |
 
-### Raw md row (persisted)
+### Raw CSV row (persisted)
 
-```markdown
-| Level | Task |
-| Status | ready |
-| Confidence | 90% |
-| Effort | 2 person-days |
-| impact_slice | 0.4 |
-| Parent_links | RICE-STORY-001:100% |
-| start_date | 2026-07-01 |
-| end_date | — |
+```csv
+RICE-TASK-005,计划订单：前端入口/弹窗/配置,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,2026-07-01,,,,,"…"
 ```
 
 ### After build_html (HTML only — not in md)
