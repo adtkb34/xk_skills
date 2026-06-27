@@ -25,8 +25,13 @@ COMPUTED_MD_FIELDS = frozenset({
     "RICE", "RICE_norm", "Score", "Effective_RICE", "Reach_source", "Impact_source",
 })
 
+BACKLOG_STEM = "priority-intake-backlog"
 ITEMS_CSV_SUFFIX = ".items.csv"
 EXECUTIONS_CSV_SUFFIX = ".executions.csv"
+SCHEDULE_ANCHOR = re.compile(
+    r"^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2})(?::\d{2})?)?$"
+)
+TIME_ONLY = re.compile(r"^\d{2}:\d{2}(?::\d{2})?$")
 
 # CSV header (lowercase) → internal field key used by compute pipeline
 CSV_FIELD_MAP = {
@@ -43,6 +48,11 @@ CSV_FIELD_MAP = {
     "ledger_ref": "Ledger_ref",
     "notes": "Notes",
 }
+
+
+def backlog_md_in_dir(backlog_dir: Path) -> Path:
+    """Resolve priority-intake-backlog.md inside a backlog directory."""
+    return backlog_dir / f"{BACKLOG_STEM}.md"
 
 
 def items_csv_path(md_path: Path) -> Path:
@@ -108,6 +118,8 @@ def parse_executions_csv(csv_path: Path) -> list[dict]:
             "task_id": task_id,
             "start_date": normalize_cell(row.get("start_date", "")),
             "end_date": normalize_cell(row.get("end_date", "")),
+            "start_time": normalize_cell(row.get("start_time", "")),
+            "end_time": normalize_cell(row.get("end_time", "")),
             "status": normalize_cell(row.get("status", "")) or "pending",
             "notes": normalize_cell(row.get("notes", "")),
         })
@@ -123,6 +135,7 @@ def build_calendar_slots(item: dict) -> list[dict]:
                 "slot_id": ex["id"],
                 "label": ex["id"].split("-")[-1],
                 "schedule": ex_sch,
+                "start_time": ex_sch.get("start_time"),
             })
     return slots
 
@@ -140,6 +153,8 @@ def attach_executions(items: list[dict], executions: list[dict]) -> None:
         ex["schedule"] = resolve_schedule({
             "start_date": ex.get("start_date", ""),
             "end_date": ex.get("end_date", ""),
+            "start_time": ex.get("start_time", ""),
+            "end_time": ex.get("end_time", ""),
             "Effort": effort,
         })
         task["executions"].append(ex)
@@ -214,11 +229,30 @@ def is_root_item(parents: str) -> bool:
     return not parents or parents.strip() in ("—", "-", "")
 
 
-def parse_date_field(val: str) -> str | None:
+def normalize_time(val: str) -> str | None:
     if not val or val.strip() in ("—", "-", ""):
         return None
     v = val.strip()
-    return v if DATE_ISO.match(v) else None
+    if not TIME_ONLY.match(v):
+        return None
+    return v[:5]
+
+
+def parse_schedule_anchor(val: str) -> tuple[str | None, str | None]:
+    if not val or val.strip() in ("—", "-", ""):
+        return None, None
+    v = val.strip()
+    if DATE_ISO.match(v):
+        return v, None
+    m = SCHEDULE_ANCHOR.match(v)
+    if m:
+        return m.group(1), normalize_time(m.group(2) or "")
+    return None, None
+
+
+def parse_date_field(val: str) -> str | None:
+    date_part, _ = parse_schedule_anchor(val)
+    return date_part
 
 
 def add_calendar_days(iso: str, offset: int) -> str:
@@ -233,8 +267,12 @@ def calendar_span_days(effort_days: float) -> int:
 
 
 def resolve_schedule(fields: dict) -> dict:
-    start = parse_date_field(fields.get("start_date", ""))
-    end = parse_date_field(fields.get("end_date", ""))
+    start, start_time = parse_schedule_anchor(fields.get("start_date", ""))
+    end, end_time = parse_schedule_anchor(fields.get("end_date", ""))
+    if not start_time:
+        start_time = normalize_time(fields.get("start_time", ""))
+    if not end_time:
+        end_time = normalize_time(fields.get("end_time", ""))
     effort_days = parse_effort_days(fields.get("Effort", ""))
     span = calendar_span_days(effort_days)
 
@@ -243,6 +281,8 @@ def resolve_schedule(fields: dict) -> dict:
             "mode": "invalid",
             "start": None,
             "end": None,
+            "start_time": start_time,
+            "end_time": end_time,
             "effort_days": effort_days or None,
             "schedule_error": "不能同时填写 start_date 与 end_date",
         }
@@ -252,6 +292,8 @@ def resolve_schedule(fields: dict) -> dict:
                 "mode": "invalid",
                 "start": start,
                 "end": None,
+                "start_time": start_time,
+                "end_time": end_time,
                 "effort_days": None,
                 "schedule_error": "有 start_date 时必须可解析 Effort（至少 0.5 person-day）",
             }
@@ -260,6 +302,8 @@ def resolve_schedule(fields: dict) -> dict:
             "mode": "range",
             "start": start,
             "end": cal_end,
+            "start_time": start_time,
+            "end_time": end_time,
             "effort_days": effort_days,
             "schedule_error": None,
         }
@@ -270,6 +314,8 @@ def resolve_schedule(fields: dict) -> dict:
                 "mode": "range",
                 "start": cal_start,
                 "end": end,
+                "start_time": start_time,
+                "end_time": end_time,
                 "effort_days": effort_days,
                 "schedule_error": None,
             }
@@ -277,6 +323,8 @@ def resolve_schedule(fields: dict) -> dict:
             "mode": "milestone",
             "start": end,
             "end": end,
+            "start_time": end_time or start_time,
+            "end_time": end_time,
             "effort_days": None,
             "schedule_error": None,
         }
@@ -284,6 +332,8 @@ def resolve_schedule(fields: dict) -> dict:
         "mode": "none",
         "start": None,
         "end": None,
+        "start_time": start_time,
+        "end_time": end_time,
         "effort_days": effort_days or None,
         "schedule_error": None,
     }
@@ -543,21 +593,42 @@ def render_html(data: dict, source: Path, generated_at: str) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build HTML from priority-intake-backlog.md")
-    parser.add_argument("input", type=Path, help="Path to priority-intake-backlog.md")
-    parser.add_argument("-o", "--output", type=Path, help="Output HTML path (default: same dir, .html)")
+    parser = argparse.ArgumentParser(description="Build HTML from priority-intake-backlog")
+    parser.add_argument(
+        "backlog_dir",
+        type=Path,
+        help="Backlog directory (e.g. docs/backlog)",
+    )
+    parser.add_argument("-o", "--output", type=Path, help="Output HTML path (default: <backlog_dir>/priority-intake-backlog.html)")
     args = parser.parse_args()
 
-    if not args.input.is_file():
-        print(f"Error: file not found: {args.input}", file=sys.stderr)
+    if not args.backlog_dir.exists():
+        print(f"Error: path not found: {args.backlog_dir}", file=sys.stderr)
         return 1
 
-    data = parse_backlog(args.input)
-    out = args.output or args.input.with_suffix(".html")
+    if not args.backlog_dir.is_dir():
+        print(
+            f"Error: expected a directory, not a file: {args.backlog_dir}\n"
+            f"Pass the backlog folder (e.g. docs/backlog), not {BACKLOG_STEM}.md.",
+            file=sys.stderr,
+        )
+        return 1
+
+    md_path = backlog_md_in_dir(args.backlog_dir)
+    if not md_path.is_file():
+        print(
+            f"Error: backlog file not found: {md_path}\n"
+            f"Expected {BACKLOG_STEM}.md inside {args.backlog_dir}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    data = parse_backlog(md_path)
+    out = args.output or md_path.with_suffix(".html")
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    csv_path = items_csv_path(args.input)
-    exec_path = executions_csv_path(args.input)
-    source_parts = [args.input.name]
+    csv_path = items_csv_path(md_path)
+    exec_path = executions_csv_path(md_path)
+    source_parts = [md_path.name]
     if csv_path.is_file():
         source_parts.append(csv_path.name)
     if exec_path.is_file():

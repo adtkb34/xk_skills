@@ -88,16 +88,17 @@ Dates: `YYYY-MM-DD`. Span uses **natural days** from linked item's parsed `Effor
 **`priority-intake-backlog.executions.csv`** — one row per execution / schedule slot:
 
 ```csv
-id,task_id,start_date,end_date,status,notes
-EXEC-001,RICE-TASK-005,2026-07-01,,pending,首次排期
-EXEC-002,RICE-TASK-005,2026-07-08,,pending,重试
+id,task_id,start_date,end_date,start_time,end_time,status,notes
+EXEC-001,RICE-TASK-005,2026-07-01,,09:00,,pending,首次排期
+EXEC-002,RICE-TASK-005,2026-07-08T14:30,,,,pending,重试
 ```
 
 | Column | Required | Notes |
 | --- | --- | --- |
 | `id` | yes | e.g. `EXEC-001` |
 | `task_id` | yes | Must match `id` in `.items.csv` |
-| `start_date` / `end_date` | optional | Set **only one**; span uses linked task's `effort` |
+| `start_date` / `end_date` | optional | Set **only one**; `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM` |
+| `start_time` / `end_time` | optional | `HH:MM` if not embedded in date; calendar chip shows time on start day |
 | `status` | optional | `pending` \| `running` \| `success` \| `failed` \| `cancelled` (default `pending`) |
 | `notes` | optional | Free text |
 
@@ -146,7 +147,7 @@ Empty cell = not set. Quote `notes` when it contains commas.
 **`docs/backlog/priority-intake-backlog.executions.csv`** — header only until first schedule:
 
 ```csv
-id,task_id,start_date,end_date,status,notes
+id,task_id,start_date,end_date,start_time,end_time,status,notes
 ```
 
 ## Row template (quick append — child Task CSV line)

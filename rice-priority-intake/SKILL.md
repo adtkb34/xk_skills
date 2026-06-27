@@ -60,14 +60,13 @@ After user approval, create `docs/backlog/` and template files (`priority-intake
 **生成 HTML**
 
 ```bash
-python .cursor/skills/rice-priority-intake/scripts/build_html.py \
-  docs/backlog/priority-intake-backlog.md
+python .cursor/skills/rice-priority-intake/scripts/build_html.py docs/backlog
 ```
 
-输出默认写到同目录 `priority-intake-backlog.html`。指定输出路径：
+输出默认写到 `docs/backlog/priority-intake-backlog.html`。指定输出路径：
 
 ```bash
-python .cursor/skills/rice-priority-intake/scripts/build_html.py path/to/backlog.md -o path/to/report.html
+python .cursor/skills/rice-priority-intake/scripts/build_html.py docs/backlog -o path/to/report.html
 ```
 
 用户批准写入后，运行上述脚本并告知 HTML 路径。用户可用浏览器或 `open_resource` 打开。
