@@ -1,17 +1,27 @@
 ---
 name: rice-priority-intake
 description: >-
-  Runs RICE priority intake for hierarchical product backlogs with multi-parent
-  attribution. Asks structured questions, scores Reach/Impact/Confidence/Effort,
-  rolls up Epic→Feature→Story→Task, and sorts the backlog. Use when the user
-  submits a new requirement, asks what to build first, mentions RICE, priority
-  intake, backlog ranking, or prioritization for material-demand-dashboard or
-  similar products.
+  Runs confirm-first RICE priority intake for product backlogs. One user request
+  yields one backlog item by default. Artifacts live under docs/backlog/. Asks
+  structured questions, scores Reach/Impact/Confidence/Effort, supports
+  Epic→Feature→Story→Task hierarchy and multi-parent attribution. Use when the
+  user submits a new requirement, asks what to build first, mentions RICE,
+  priority intake, backlog ranking, or prioritization.
 ---
 
 # RICE Priority Intake
 
-Automate **Priority Intake**: every new requirement gets a short interview, a RICE score, parent links, and a ranked position in the backlog.
+Run **Priority Intake (confirm-first)**: interview → draft summary → **user approval** → write one backlog row → build HTML.
+
+## Defaults (one request = one item)
+
+- User describes **one** requirement → create **one** backlog row for **that** requirement only.
+- If user says "任务" / "task", default `Level = Task` unless they specify otherwise.
+- **Do not** auto-decompose into Epic / Feature / Story / sibling Tasks.
+- **Do not** create missing parent rows. If `parent_links` are needed, **ask** for an existing parent ID or whether to run a **separate** parent intake.
+- **Do not** invent sibling `impact_slice` splits or extra tasks from one sentence.
+
+**Multi-row allowed only when user explicitly asks**, e.g. "拆成几个 task", "补一个 Story 和下面 3 个 Task", "给这个 Epic 建子项".
 
 ## When to run
 
@@ -26,15 +36,17 @@ Do **not** replace Skill 104 prompt refinement. RICE decides **order**; Skill 10
 
 ## Artifacts
 
+All files live under **`docs/backlog/`** at the **current workspace root** (unless the user names a different path). **Never** default to `.ai-factory/` or `00-intake/`.
+
 | File | Purpose |
 | --- | --- |
-| `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.md` | **决策** — 已确认决策、实施顺序 |
-| `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.items.csv` | **原始数据** — Items 表格（一行一条）；仅存访谈输入，**不含**计算列 |
-| `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.executions.csv` | **执行 / 排期** — 一行一次执行；`task_id` 指向 items |
-| `projects/<slug>/.ai-factory/00-intake/priority-intake-backlog.html` | **计算视图** — build 生成：Score、Summary、日历、rollup |
-| `projects/<slug>/.ai-factory/00-intake/core-feature-ledger.md` | P0/P1 truth; sync Priority column from RICE rank |
+| `docs/backlog/priority-intake-backlog.md` | **决策** — 已确认决策、实施顺序 |
+| `docs/backlog/priority-intake-backlog.items.csv` | **原始数据** — Items 表格（一行一条）；仅存访谈输入，**不含**计算列 |
+| `docs/backlog/priority-intake-backlog.executions.csv` | **执行 / 排期** — 一行一次执行；`task_id` 指向 items |
+| `docs/backlog/priority-intake-backlog.html` | **计算视图** — build 生成：Score、Summary、日历、rollup |
+| `docs/backlog/core-feature-ledger.md` | P0/P1 truth; sync Priority column from RICE rank |
 
-Create `priority-intake-backlog.md`, `priority-intake-backlog.items.csv`, and `priority-intake-backlog.executions.csv` on first intake if missing. Use templates in [reference.md](reference.md).
+After user approval, create `docs/backlog/` and template files (`priority-intake-backlog.md`, `.items.csv`, `.executions.csv`) if missing. Use templates in [reference.md](reference.md).
 
 **维护规则**：只改 `.md`（原始字段）；改完后运行 `build_html.py` 刷新 HTML。**禁止**在 md 写入 RICE/Score/Summary；**禁止**手改 `.html`。
 
@@ -49,7 +61,7 @@ Create `priority-intake-backlog.md`, `priority-intake-backlog.items.csv`, and `p
 
 ```bash
 python .cursor/skills/rice-priority-intake/scripts/build_html.py \
-  projects/material-demand-dashboard/.ai-factory/00-intake/priority-intake-backlog.md
+  docs/backlog/priority-intake-backlog.md
 ```
 
 输出默认写到同目录 `priority-intake-backlog.html`。指定输出路径：
@@ -58,7 +70,7 @@ python .cursor/skills/rice-priority-intake/scripts/build_html.py \
 python .cursor/skills/rice-priority-intake/scripts/build_html.py path/to/backlog.md -o path/to/report.html
 ```
 
-每次 intake 写完 `.md` 后，**应自动运行**上述脚本并告知用户 HTML 路径。用户可用浏览器或 `open_resource` 打开。
+用户批准写入后，运行上述脚本并告知 HTML 路径。用户可用浏览器或 `open_resource` 打开。
 
 **不会单独再产一份 Word/PDF**；聊天里的「Priority Intake」回复是即时摘要，持久内容只在 `.md` + 生成的 `.html`。
 
@@ -98,33 +110,28 @@ Copy and track:
 ```
 Priority Intake:
 - [ ] Step 1: Parse requirement
-- [ ] Step 2: Classify level + parents
+- [ ] Step 2: Confirm title + level (+ parents only if needed)
 - [ ] Step 3: RICE interview
 - [ ] Step 4: Score + multi-parent attribution (compute in reply / build — **not** in md)
 - [ ] Step 4.5: Normalize (Score = norm × 100 — **build only**)
-- [ ] Step 5: Write backlog row (**raw fields only**)
+- [ ] Step 4.9: Present draft summary; wait for explicit user approval
+- [ ] Step 5: Write backlog row (**raw fields only** — only after approval)
 - [ ] Step 5.5: Schedule (optional — rows in `.executions.csv` only)
 - [ ] Step 6: Run build_html + recommend from HTML Summary
-- [ ] Step 7: Sync core-feature-ledger if applicable
+- [ ] Step 7: Sync core-feature-ledger if applicable (with user approval)
 ```
 
 ### Step 1: Parse requirement
 
 Extract: title, type (Epic/Feature/Story/Task/Bug/Chore), user outcome, affected surfaces, P0/P1 hint, dependencies, requester urgency.
 
-### Step 2: Classify level + parents
+### Step 2: Confirm title + level (+ parents only if needed)
 
-Ask when unclear:
-
-1. **Level** — Epic / Feature / Story / Task?
-2. **Parents** — zero, one, or many? List each parent ID from the backlog.
+1. Confirm **single item title** and **level** — default from the user's words (e.g. "任务" → Task).
+2. **Only if** the user referenced a parent or wants linkage — ask for existing parent ID(s) from the backlog.
 3. **If multiple parents** — value split (must sum to 100%): e.g. 60% dashboard, 40% export.
 
-Rules:
-
-- Shared platform/API work → usually **Task** or **Story** with **multi-parent links**.
-- User-facing capability → **Feature** or **Story** under one primary Epic.
-- Strategic theme → **Epic**.
+Do **not** pressure the user to pick Epic vs Feature for every request. Do **not** create parent rows or sibling Tasks unless explicitly requested.
 
 Use `AskQuestion` when available; otherwise ask conversationally in one batch (max 2 rounds).
 
@@ -224,9 +231,24 @@ Single parent 100% + slice 0.4 → `norm = norm(parent) × 0.4` → **guaranteed
 
 All of Step 4–4.5 runs in **`build_html.py`** and intake chat replies — **never persisted in md**.
 
-### Step 5: Write backlog row (raw only)
+### Step 4.9: Confirm draft (required before any write)
 
-Append one CSV row to `priority-intake-backlog.items.csv` using [reference.md](reference.md) column template. Update decisions in `.md` when needed.
+Present the full draft in chat:
+
+- Title, level, scorecard (Reach / Impact / Confidence / Effort / RICE / Score)
+- `parent_links` and `impact_slice` (if any)
+- Proposed CSV row (exact fields)
+- Whether `docs/backlog/` or template files will be created
+
+Ask: **Approve / Edit / Cancel** (`AskQuestion` when available).
+
+**Forbidden before approval**: creating directories, writing `.md` / `.csv`, running `build_html.py`, syncing ledger.
+
+On **Edit** — revise and re-show. On **Cancel** — stop without writing.
+
+### Step 5: Write backlog row (raw only — after approval)
+
+Append **one** CSV row to `docs/backlog/priority-intake-backlog.items.csv` using [reference.md](reference.md) column template. Update decisions in `.md` when needed.
 
 **Root item** (no `parent_links`): `Level`, `Status`, `Reach`, `Impact`, `Confidence`, `Effort`, `Blocks`, `Blocked_by`, `Ledger_ref`, `Notes`.
 
@@ -261,16 +283,18 @@ Calendar span computed by build (natural days). See reference.
 4. Top 5 actionable in chat reply (may cite computed Score).
 5. Confirm md has **no computed columns** before finishing.
 
-### Step 7: Sync ledger
+### Step 7: Sync ledger (with user approval)
 
-If item maps to `core-feature-ledger.md`:
+If item maps to `docs/backlog/core-feature-ledger.md`, ask before updating:
 
 - Set `Priority` column to P0/P1/P2 from RICE band (reference) **or** keep explicit P0 and note RICE rank in Notes.
-- Never downgrade P0 without explicit user approval (AI Product Factory rule).
+- Never downgrade P0 without explicit user approval.
 
 ## Response format
 
-After each intake, reply with:
+**Before approval (Step 4.9)** — show draft using the template below, ending with **Approve / Edit / Cancel**.
+
+**After approval** — reply with persisted summary:
 
 ```markdown
 ## Priority Intake: [Title]

@@ -106,7 +106,9 @@ EXEC-002,RICE-TASK-005,2026-07-08,,pending,重试
 
 ## Backlog file template
 
-**`priority-intake-backlog.md`** — decisions only:
+All files live under **`docs/backlog/`** at the workspace root (unless the user specifies another path).
+
+**`docs/backlog/priority-intake-backlog.md`** — decisions only:
 
 ```markdown
 # Priority Intake Backlog
@@ -122,7 +124,7 @@ EXEC-002,RICE-TASK-005,2026-07-08,,pending,重试
 **实施顺序**：…
 ```
 
-**`priority-intake-backlog.items.csv`** — one row per item (UTF-8 with BOM for Excel):
+**`docs/backlog/priority-intake-backlog.items.csv`** — one row per item (UTF-8 with BOM for Excel):
 
 ```csv
 id,title,level,status,reach,impact,confidence,effort,impact_slice,parent_links,blocks,blocked_by,ledger_ref,notes
@@ -141,7 +143,7 @@ RICE-TASK-NNN,Child task,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,
 
 Empty cell = not set. Quote `notes` when it contains commas.
 
-**`priority-intake-backlog.executions.csv`** — header only until first schedule:
+**`docs/backlog/priority-intake-backlog.executions.csv`** — header only until first schedule:
 
 ```csv
 id,task_id,start_date,end_date,status,notes
@@ -277,3 +279,5 @@ intake → ready → in-progress → done
 | start_date + end_date both set on execution | Pick one anchor only |
 | start_date without linked task Effort | Invalid schedule in HTML |
 | start_date / end_date on item row | **Forbidden** — use `.executions.csv` |
+| Auto-decompose one request into many items | One request → one row unless user explicitly asks to split |
+| Write files before user approves draft | Step 4.9 confirm-first; no writes until approval |

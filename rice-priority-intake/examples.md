@@ -1,5 +1,38 @@
 # RICE Priority Intake — Examples
 
+## Example 0: Single task, no decomposition (default)
+
+### User request
+
+> 给物料看板加一个导出按钮，这是个 task。
+
+### Agent behavior
+
+1. Default `Level = Task` from user's words — **do not** create Story/Epic parents or sibling Tasks.
+2. Interview Reach / Impact / Confidence / Effort for this one item.
+3. Show draft summary (Step 4.9) — **wait for Approve**.
+4. After approval, append **one** row to `docs/backlog/priority-intake-backlog.items.csv`.
+
+### Step 2 classification
+
+| Field | Value |
+| --- | --- |
+| Level | Task |
+| Parents | none (unless user links to an existing ID) |
+
+### Draft CSV row (shown before write)
+
+```csv
+RICE-TASK-007,物料看板导出按钮,Task,intake,24,1,80%,2 person-days,,,,,,"用户确认后写入"
+```
+
+### What NOT to do
+
+- Do not create `RICE-STORY-…` + 3 sibling Tasks from this one sentence.
+- Do not write to `.ai-factory/00-intake/` — use `docs/backlog/`.
+
+---
+
 ## Example A: Single parent 100% (计划订单 Story → Task)
 
 ### User request
@@ -13,6 +46,8 @@
 | Level | Task |
 | Parents | `RICE-STORY-001:100%` |
 | Siblings | TASK-005 (前端), TASK-006 (清逻辑), TASK-004 (MES) — impact slices 0.4 / 0.35 / 0.25 |
+
+> **Anti-pattern note**: The sibling list is **pre-existing backlog context** for this Story — not auto-created from one user message. A single request like「创建采购申请改成创建计划订单」should produce **one** Task row (this one), not TASK-004/005/006 together.
 
 ### Parent scores (already in backlog)
 
