@@ -14,16 +14,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-ITEM_HEADER = re.compile(r"^###\s+(RICE-[A-Z]+-\d+)\s+[—–-]\s+(.+)$")
-TABLE_ROW = re.compile(r"^\|\s*(.+?)\s*\|\s*(.+?)\s*\|$")
 DECISION_HEADER = re.compile(r"^\|\s*#\s*\|", re.I)
 PARENT_LINK = re.compile(r"^(RICE-[A-Z]+-\d+)(?::(\d+)%)?$")
 DATE_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TEMPLATE_PATH = Path(__file__).with_name("backlog-dashboard.template.html")
-
-COMPUTED_MD_FIELDS = frozenset({
-    "RICE", "RICE_norm", "Score", "Effective_RICE", "Reach_source", "Impact_source",
-})
 
 BACKLOG_STEM = "priority-intake-backlog"
 ITEMS_CSV_SUFFIX = ".items.csv"
@@ -32,6 +26,20 @@ SCHEDULE_ANCHOR = re.compile(
     r"^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2})(?::\d{2})?)?$"
 )
 TIME_ONLY = re.compile(r"^\d{2}:\d{2}(?::\d{2})?$")
+
+DAYS_PER_WEEK = 7
+DAYS_PER_MONTH = 30
+
+ITEMS_CSV_COLUMNS = [
+    "id", "title", "level", "status", "reach", "impact", "confidence", "effort",
+    "impact_slice", "parent_links", "blocks", "blocked_by", "ledger_ref", "notes",
+]
+
+EXECUTIONS_CSV_COLUMNS = [
+    "id", "task_id", "start_date", "end_date", "start_time", "end_time", "status", "notes",
+]
+
+EXECUTION_STATUSES = frozenset({"pending", "running", "success", "failed", "cancelled"})
 
 # CSV header (lowercase) → internal field key used by compute pipeline
 CSV_FIELD_MAP = {
@@ -79,6 +87,184 @@ def row_to_fields(row: dict[str, str]) -> dict[str, str]:
         if val:
             fields[field_key] = val
     return fields
+
+
+def read_items_rows(csv_path: Path) -> list[dict[str, str]]:
+    if not csv_path.is_file():
+        return []
+    text = csv_path.read_text(encoding="utf-8-sig")
+    reader = csv.DictReader(text.splitlines())
+    if not reader.fieldnames:
+        raise ValueError(f"CSV has no header row: {csv_path}")
+    rows: list[dict[str, str]] = []
+    for row in reader:
+        item_id = normalize_cell(row.get("id", ""))
+        if not item_id:
+            continue
+        rows.append({col: normalize_cell(row.get(col, "")) for col in ITEMS_CSV_COLUMNS})
+    return rows
+
+
+def write_items_rows(csv_path: Path, rows: list[dict[str, str]]) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=ITEMS_CSV_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def next_item_id(level: str, existing_ids: set[str]) -> str:
+    level_key = level.strip().upper() or "TASK"
+    prefix = f"RICE-{level_key}-"
+    nums = []
+    for item_id in existing_ids:
+        if item_id.startswith(prefix):
+            match = re.search(r"-(\d+)$", item_id)
+            if match:
+                nums.append(int(match.group(1)))
+    return f"{prefix}{(max(nums, default=0) + 1):03d}"
+
+
+def item_body_to_row(body: dict, existing_ids: set[str], *, item_id: str | None = None) -> dict[str, str]:
+    title = normalize_cell(body.get("title", ""))
+    if not title:
+        raise ValueError("title is required")
+    level = normalize_cell(body.get("level", "")) or "Task"
+    if level not in {"Epic", "Feature", "Story", "Task"}:
+        raise ValueError("level must be Epic, Feature, Story, or Task")
+
+    resolved_id = normalize_cell(item_id or body.get("id", ""))
+    if not resolved_id:
+        resolved_id = next_item_id(level, existing_ids)
+    if resolved_id in existing_ids:
+        raise ValueError(f"duplicate id: {resolved_id}")
+
+    parent_links = normalize_cell(body.get("parent_links", ""))
+    row = {col: "" for col in ITEMS_CSV_COLUMNS}
+    row["id"] = resolved_id
+    row["title"] = title
+    row["level"] = level
+    row["status"] = normalize_cell(body.get("status", "")) or "intake"
+    row["confidence"] = normalize_cell(body.get("confidence", ""))
+    row["effort"] = normalize_effort_storage(body, level)
+    row["impact_slice"] = normalize_cell(body.get("impact_slice", ""))
+    row["parent_links"] = parent_links
+    row["blocks"] = normalize_cell(body.get("blocks", ""))
+    row["blocked_by"] = normalize_cell(body.get("blocked_by", ""))
+    row["ledger_ref"] = normalize_cell(body.get("ledger_ref", ""))
+    row["notes"] = normalize_cell(body.get("notes", ""))
+    if parent_links:
+        row["reach"] = ""
+        row["impact"] = ""
+    else:
+        row["reach"] = normalize_cell(body.get("reach", ""))
+        row["impact"] = normalize_cell(body.get("impact", ""))
+    return row
+
+
+def read_executions_rows(csv_path: Path) -> list[dict[str, str]]:
+    if not csv_path.is_file():
+        return []
+    text = csv_path.read_text(encoding="utf-8-sig")
+    reader = csv.DictReader(text.splitlines())
+    if not reader.fieldnames:
+        raise ValueError(f"CSV has no header row: {csv_path}")
+    rows: list[dict[str, str]] = []
+    for row in reader:
+        ex_id = normalize_cell(row.get("id", ""))
+        if not ex_id:
+            continue
+        rows.append({col: normalize_cell(row.get(col, "")) for col in EXECUTIONS_CSV_COLUMNS})
+    return rows
+
+
+def write_executions_rows(csv_path: Path, rows: list[dict[str, str]]) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=EXECUTIONS_CSV_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def next_execution_id(existing_ids: set[str]) -> str:
+    nums = []
+    for ex_id in existing_ids:
+        if ex_id.startswith("EXEC-"):
+            match = re.search(r"-(\d+)$", ex_id)
+            if match:
+                nums.append(int(match.group(1)))
+    return f"EXEC-{(max(nums, default=0) + 1):03d}"
+
+
+def execution_body_to_row(
+    body: dict,
+    existing_ids: set[str],
+    valid_task_ids: set[str],
+    *,
+    execution_id: str | None = None,
+) -> dict[str, str]:
+    task_id = normalize_cell(body.get("task_id", ""))
+    if not task_id:
+        raise ValueError("task_id is required")
+    if task_id not in valid_task_ids:
+        raise ValueError(f"unknown task_id: {task_id}")
+
+    start_date = normalize_cell(body.get("start_date", ""))
+    end_date = normalize_cell(body.get("end_date", ""))
+    if start_date and end_date:
+        raise ValueError("set start_date or end_date, not both")
+
+    start_time = normalize_cell(body.get("start_time", ""))
+    end_time = normalize_cell(body.get("end_time", ""))
+    if start_date:
+        date_part, embedded_time = parse_schedule_anchor(start_date)
+        if not date_part:
+            raise ValueError("invalid start_date (use YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
+        start_date = start_date if "T" in start_date or " " in start_date else date_part
+        if embedded_time and not start_time:
+            start_time = embedded_time
+    if end_date:
+        date_part, embedded_time = parse_schedule_anchor(end_date)
+        if not date_part:
+            raise ValueError("invalid end_date (use YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
+        end_date = end_date if "T" in end_date or " " in end_date else date_part
+        if embedded_time and not end_time:
+            end_time = embedded_time
+
+    if start_time and not TIME_ONLY.match(start_time):
+        raise ValueError("invalid start_time (use HH:MM)")
+    if end_time and not TIME_ONLY.match(end_time):
+        raise ValueError("invalid end_time (use HH:MM)")
+
+    status = normalize_cell(body.get("status", "")) or "pending"
+    if status not in EXECUTION_STATUSES:
+        raise ValueError(f"status must be one of: {', '.join(sorted(EXECUTION_STATUSES))}")
+
+    resolved_id = normalize_cell(execution_id or body.get("id", ""))
+    if not resolved_id:
+        resolved_id = next_execution_id(existing_ids)
+    if resolved_id in existing_ids:
+        raise ValueError(f"duplicate id: {resolved_id}")
+
+    row = {col: "" for col in EXECUTIONS_CSV_COLUMNS}
+    row["id"] = resolved_id
+    row["task_id"] = task_id
+    row["start_date"] = start_date
+    row["end_date"] = end_date
+    row["start_time"] = start_time
+    row["end_time"] = end_time
+    row["status"] = status
+    row["notes"] = normalize_cell(body.get("notes", ""))
+    return row
+
+
+def api_payload(data: dict) -> dict:
+    return {
+        "items": data["items"],
+        "summary": data["summary"],
+        "decisions": data.get("decisions", []),
+        "implementationOrder": data.get("implementationOrder", ""),
+    }
 
 
 def parse_items_csv(csv_path: Path) -> list[dict]:
@@ -163,19 +349,6 @@ def attach_executions(items: list[dict], executions: list[dict]) -> None:
         item["calendar_slots"] = build_calendar_slots(item)
 
 
-def parse_markdown_table_row(line: str) -> tuple[str, str] | None:
-    m = TABLE_ROW.match(line.strip())
-    if not m:
-        return None
-    key, val = m.group(1).strip(), m.group(2).strip()
-    if key in ("---", "Field", "Rank", "#") or set(key) <= {"-"}:
-        return None
-    key = re.sub(r"\*\*(.+?)\*\*", r"\1", key)
-    val = re.sub(r"\*\*(.+?)\*\*", r"\1", val)
-    val = val.strip("`")
-    return key, val
-
-
 def parse_float(val: str) -> float:
     try:
         return float(re.sub(r"[^\d.]", "", val) or "0")
@@ -189,21 +362,55 @@ def parse_confidence(val: str) -> float:
 
 
 def parse_effort_days(effort_str: str) -> float:
+    """Parse effort from CSV — numeric days only (no unit suffix)."""
     if not effort_str or effort_str.strip() in ("—", "-", ""):
         return 0.0
-    s = effort_str.lower()
-    num = parse_float(effort_str)
-    if num <= 0:
+    s = effort_str.strip()
+    if not re.match(r"^\d+(\.\d+)?$", s):
         return 0.0
-    if "month" in s or "月" in s:
-        return num * 20.0
-    if "week" in s or "周" in s:
-        return num * 5.0
-    return num
+    num = float(s)
+    return num if num > 0 else 0.0
+
+
+def default_effort_unit(level: str) -> str:
+    return {
+        "Epic": "months",
+        "Feature": "weeks",
+        "Story": "days",
+        "Task": "days",
+    }.get(level, "days")
+
+
+def effort_amount_to_days(amount: float, unit: str) -> float:
+    unit_key = unit.strip().lower()
+    if unit_key == "months":
+        return amount * float(DAYS_PER_MONTH)
+    if unit_key == "weeks":
+        return amount * float(DAYS_PER_WEEK)
+    return amount
+
+
+def format_effort_storage(days: float) -> str:
+    if days <= 0:
+        return ""
+    if abs(days - round(days)) < 1e-9:
+        return str(int(round(days)))
+    return f"{days:.2f}".rstrip("0").rstrip(".")
+
+
+def normalize_effort_storage(body: dict, level: str) -> str:
+    amount_raw = normalize_cell(body.get("effort_amount", ""))
+    if not amount_raw:
+        return ""
+    unit = normalize_cell(body.get("effort_unit", "")) or default_effort_unit(level)
+    amount = parse_float(amount_raw)
+    if amount <= 0:
+        return ""
+    return format_effort_storage(effort_amount_to_days(amount, unit))
 
 
 def effort_for_rice(level: str, effort_days: float) -> float:
-    minimum = 0.5 if level == "Task" else 2.5
+    minimum = 0.5 if level == "Task" else DAYS_PER_WEEK / 2.0
     return max(effort_days, minimum)
 
 
@@ -295,7 +502,7 @@ def resolve_schedule(fields: dict) -> dict:
                 "start_time": start_time,
                 "end_time": end_time,
                 "effort_days": None,
-                "schedule_error": "start_date requires parseable Effort (at least 0.5 person-day)",
+                "schedule_error": "start_date requires Effort ≥ 0.5 (days)",
             }
         cal_end = add_calendar_days(start, span - 1)
         return {
@@ -483,20 +690,8 @@ def run_compute_pipeline(items: list[dict]) -> None:
     compute_rollup(items)
 
 
-DECISION_SECTION_HEADERS = frozenset({
-    "## Confirmed decisions",
-    "## \u5df2\u786e\u8ba4\u51b3\u7b56",  # legacy
-})
-IMPLEMENTATION_ORDER_MARKERS = (
-    "**Implementation order**",
-    "**\u5b9e\u65bd\u987a\u5e8f**",  # legacy
-)
-IMPLEMENTATION_ORDER_PREFIXES = (
-    "**Implementation order**:",
-    "**Implementation order**: ",
-    "**\u5b9e\u65bd\u987a\u5e8f**\uff1a",  # legacy fullwidth colon
-    "**\u5b9e\u65bd\u987a\u5e8f**:",  # legacy
-)
+DECISION_SECTION_HEADER = "## Confirmed decisions"
+IMPLEMENTATION_ORDER_PREFIX = "**Implementation order**:"
 
 
 def parse_decisions_md(text: str) -> tuple[list[str], str]:
@@ -509,19 +704,16 @@ def parse_decisions_md(text: str) -> tuple[list[str], str]:
     for line in lines:
         stripped = line.strip()
 
-        if stripped in DECISION_SECTION_HEADERS:
+        if stripped == DECISION_SECTION_HEADER:
             in_decisions = True
             decision_cols = []
             continue
 
-        if stripped.startswith("## ") and stripped not in DECISION_SECTION_HEADERS:
+        if stripped.startswith("## ") and stripped != DECISION_SECTION_HEADER:
             in_decisions = False
 
-        if in_decisions and any(stripped.startswith(m) for m in IMPLEMENTATION_ORDER_MARKERS):
-            for prefix in IMPLEMENTATION_ORDER_PREFIXES:
-                if stripped.startswith(prefix):
-                    implementation_order = stripped[len(prefix):].strip()
-                    break
+        if in_decisions and stripped.startswith(IMPLEMENTATION_ORDER_PREFIX):
+            implementation_order = stripped[len(IMPLEMENTATION_ORDER_PREFIX):].strip()
             continue
 
         if in_decisions and DECISION_HEADER.match(stripped):
@@ -539,43 +731,17 @@ def parse_decisions_md(text: str) -> tuple[list[str], str]:
     return decisions, implementation_order
 
 
-def parse_items_md_legacy(text: str) -> list[dict]:
-    """Legacy: ### RICE-… — title + per-item Field|Value tables."""
-    lines = text.splitlines()
-    items: list[dict] = []
-    current: dict | None = None
-
-    for line in lines:
-        header = ITEM_HEADER.match(line.strip())
-        if header:
-            if current:
-                items.append(current)
-            current = {
-                "id": header.group(1),
-                "title": header.group(2).strip(),
-                "fields": {},
-            }
-            continue
-
-        if current and line.strip().startswith("|"):
-            row = parse_markdown_table_row(line)
-            if row and row[0] not in COMPUTED_MD_FIELDS:
-                current["fields"][row[0]] = row[1]
-
-    if current:
-        items.append(current)
-    return items
-
-
 def parse_backlog(md_path: Path) -> dict:
     text = md_path.read_text(encoding="utf-8")
     decisions, implementation_order = parse_decisions_md(text)
 
     csv_path = items_csv_path(md_path)
-    if csv_path.is_file():
-        items = parse_items_csv(csv_path)
-    else:
-        items = parse_items_md_legacy(text)
+    if not csv_path.is_file():
+        raise FileNotFoundError(
+            f"items CSV not found: {csv_path}\n"
+            f"Items must live in {csv_path.name}; md holds decisions only."
+        )
+    items = parse_items_csv(csv_path)
 
     run_compute_pipeline(items)
 
@@ -593,22 +759,96 @@ def parse_backlog(md_path: Path) -> dict:
     }
 
 
-def render_html(data: dict, source: Path, generated_at: str) -> str:
+def render_html(
+    data: dict,
+    source: Path,
+    generated_at: str,
+    *,
+    editor_enabled: bool = False,
+) -> str:
     if not TEMPLATE_PATH.is_file():
         raise FileNotFoundError(f"Template not found: {TEMPLATE_PATH}")
 
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    payload = {
-        "items": data["items"],
-        "summary": data["summary"],
-        "decisions": data.get("decisions", []),
-        "implementationOrder": data.get("implementationOrder", ""),
-    }
+    payload = api_payload(data)
     return (
         template.replace("__DATA_JSON__", json.dumps(payload, ensure_ascii=False))
         .replace("__SOURCE__", html.escape(source.name))
         .replace("__GENERATED_AT__", html.escape(generated_at))
+        .replace("__EDITOR_ENABLED__", "true" if editor_enabled else "false")
     )
+
+
+def resolve_backlog_dir(backlog_dir: Path) -> Path:
+    if not backlog_dir.exists():
+        raise FileNotFoundError(f"path not found: {backlog_dir}")
+    if not backlog_dir.is_dir():
+        raise ValueError(
+            f"expected a directory, not a file: {backlog_dir}\n"
+            f"Pass the backlog folder (e.g. docs/backlog), not {BACKLOG_STEM}.md."
+        )
+    md_path = backlog_md_in_dir(backlog_dir)
+    if not md_path.is_file():
+        raise FileNotFoundError(
+            f"backlog file not found: {md_path}\n"
+            f"Expected {BACKLOG_STEM}.md inside {backlog_dir}."
+        )
+    return md_path
+
+
+def build_backlog_html(
+    backlog_dir: Path,
+    output: Path | None = None,
+    *,
+    editor_enabled: bool = False,
+) -> tuple[Path, dict]:
+    md_path = resolve_backlog_dir(backlog_dir)
+    data = parse_backlog(md_path)
+    out = output or md_path.with_suffix(".html")
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    csv_path = items_csv_path(md_path)
+    exec_path = executions_csv_path(md_path)
+    source_parts = [md_path.name]
+    if csv_path.is_file():
+        source_parts.append(csv_path.name)
+    if exec_path.is_file():
+        source_parts.append(exec_path.name)
+    source_label = " + ".join(source_parts)
+    out.write_text(
+        render_html(data, Path(source_label), generated_at, editor_enabled=editor_enabled),
+        encoding="utf-8",
+    )
+    return out, data
+
+
+def append_item_row(backlog_dir: Path, body: dict) -> dict:
+    md_path = resolve_backlog_dir(backlog_dir)
+    csv_path = items_csv_path(md_path)
+    rows = read_items_rows(csv_path)
+    existing_ids = {row["id"] for row in rows}
+    row = item_body_to_row(body, existing_ids)
+    rows.append(row)
+    write_items_rows(csv_path, rows)
+    _, data = build_backlog_html(backlog_dir, editor_enabled=True)
+    return api_payload(data)
+
+
+def append_execution_row(backlog_dir: Path, body: dict) -> dict:
+    md_path = resolve_backlog_dir(backlog_dir)
+    items_path = items_csv_path(md_path)
+    exec_path = executions_csv_path(md_path)
+    item_rows = read_items_rows(items_path)
+    valid_task_ids = {row["id"] for row in item_rows}
+    if not valid_task_ids:
+        raise ValueError("no items in backlog — add an item before scheduling executions")
+
+    exec_rows = read_executions_rows(exec_path)
+    existing_ids = {row["id"] for row in exec_rows}
+    row = execution_body_to_row(body, existing_ids, valid_task_ids)
+    exec_rows.append(row)
+    write_executions_rows(exec_path, exec_rows)
+    _, data = build_backlog_html(backlog_dir, editor_enabled=True)
+    return api_payload(data)
 
 
 def main() -> int:
@@ -619,42 +859,26 @@ def main() -> int:
         help="Backlog directory (e.g. docs/backlog)",
     )
     parser.add_argument("-o", "--output", type=Path, help="Output HTML path (default: <backlog_dir>/priority-intake-backlog.html)")
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Start local server with CSV save (add items and executions from the HTML UI)",
+    )
+    parser.add_argument("--port", type=int, default=8765, help="Port for --serve (default: 8765)")
     args = parser.parse_args()
 
-    if not args.backlog_dir.exists():
-        print(f"Error: path not found: {args.backlog_dir}", file=sys.stderr)
+    try:
+        html_path, data = build_backlog_html(args.backlog_dir, args.output, editor_enabled=args.serve)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    if not args.backlog_dir.is_dir():
-        print(
-            f"Error: expected a directory, not a file: {args.backlog_dir}\n"
-            f"Pass the backlog folder (e.g. docs/backlog), not {BACKLOG_STEM}.md.",
-            file=sys.stderr,
-        )
-        return 1
+    print(f"Wrote {html_path} ({len(data['items'])} items)")
 
-    md_path = backlog_md_in_dir(args.backlog_dir)
-    if not md_path.is_file():
-        print(
-            f"Error: backlog file not found: {md_path}\n"
-            f"Expected {BACKLOG_STEM}.md inside {args.backlog_dir}.",
-            file=sys.stderr,
-        )
-        return 1
+    if args.serve:
+        from backlog_server import run_server
 
-    data = parse_backlog(md_path)
-    out = args.output or md_path.with_suffix(".html")
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    csv_path = items_csv_path(md_path)
-    exec_path = executions_csv_path(md_path)
-    source_parts = [md_path.name]
-    if csv_path.is_file():
-        source_parts.append(csv_path.name)
-    if exec_path.is_file():
-        source_parts.append(exec_path.name)
-    source_label = " + ".join(source_parts)
-    out.write_text(render_html(data, Path(source_label), generated_at), encoding="utf-8")
-    print(f"Wrote {out} ({len(data['items'])} items)")
+        run_server(args.backlog_dir.resolve(), args.port, html_path)
     return 0
 
 

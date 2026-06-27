@@ -23,7 +23,7 @@
 ### Draft CSV row (shown before write)
 
 ```csv
-RICE-TASK-007,Material dashboard export button,Task,intake,24,1,80%,2 person-days,,,,,,"Write after user confirms"
+RICE-TASK-007,Material dashboard export button,Task,intake,24,1,80%,2,,,,,,"Write after user confirms"
 ```
 
 ### What NOT to do
@@ -59,7 +59,7 @@ RICE-TASK-007,Material dashboard export button,Task,intake,24,1,80%,2 person-day
 | --- | --- |
 | impact_slice | 0.4 — frontend entry and config account for ~40% of Story value |
 | Confidence | 90% — UI pattern exists |
-| Effort | 2 person-days |
+| Effort | 2 (days) |
 | Blocked by | — |
 
 Schedule via `.executions.csv` (multiple runs):
@@ -73,7 +73,7 @@ EXEC-005-2,RICE-TASK-005,2026-07-08,,pending,Integration retry
 ### Raw CSV row (persisted — item definition only)
 
 ```csv
-RICE-TASK-005,Planned order: frontend entry/modal/config,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,,,,,,"…"
+RICE-TASK-005,Planned order: frontend entry/modal/config,Task,ready,,,90%,2,0.4,RICE-STORY-001:100%,,,,,,"…"
 ```
 
 ### After build_html (HTML only — not in md)
@@ -86,7 +86,7 @@ RICE_c   = (120 × 0.8 × 0.9) / 2 = 43.2
 contribution → STORY-001 = 43.2 × 100% = 43.2
 
 RICE_norm = 1.0 × 100% × 0.4 = 0.4 → Score = 40
-Calendar: EXEC-005-1 → 2026-07-01 … 2026-07-02; EXEC-005-2 → 2026-07-08 … 2026-07-09 (2 person-days each)
+Calendar: EXEC-005-1 → 2026-07-01 … 2026-07-02; EXEC-005-2 → 2026-07-08 … 2026-07-09 (2 days each)
 ```
 
 ### Why Task Score < Story Score
@@ -122,7 +122,7 @@ Calendar: EXEC-005-1 → 2026-07-01 … 2026-07-02; EXEC-005-2 → 2026-07-08 �
 | Q | A |
 | --- | --- |
 | Confidence | 80% — pattern exists in `demand-engine.ts` |
-| Effort | 5 person-days |
+| Effort | 5 (days) |
 | Blocked by | — |
 | Blocks | both parent Features |
 
@@ -197,7 +197,7 @@ Story effective (raw) = max(32, 43.2 + 50.4 + 6.0) = 99.6
 | Reach | 12 users × 20 sessions/q = 240 |
 | Impact | 1 |
 | Confidence | 50% — supplier dimension not in current API |
-| Effort | 3 person-weeks = 15 person-days |
+| Effort | 3 weeks → 21 days in CSV |
 
 ```
 RICE = (240 × 1 × 0.5) / 15 = 8

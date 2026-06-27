@@ -31,14 +31,18 @@ Use **events per quarter** when user count is unknown (e.g. "export runs", "risk
 
 ## Effort units
 
-| Level | Unit | Examples |
-| --- | --- | --- |
-| Epic | person-months | 3–12 |
-| Feature | person-weeks | 2–8 |
-| Story | person-days | 3–15 |
-| Task | person-days | 0.5–5 |
+**CSV `effort` column**: numeric **days** only (e.g. `14`, `3.5`) — no unit suffix.
 
-Convert for formula: 1 person-month = 20 person-days; 1 person-week = 5 person-days.
+**UI / intake interview** — pick a display unit by level; convert before writing CSV:
+
+| Level | Typical input unit | Example input → CSV |
+| --- | --- | --- |
+| Epic | months | 2 months → `60` |
+| Feature | weeks | 3 weeks → `21` |
+| Story | days | 6 days → `6` |
+| Task | days | 2 days → `2` |
+
+Convert: 1 month = 30 days; 1 week = 7 days.
 
 ## Priority bands (sync to ledger)
 
@@ -129,15 +133,15 @@ All files live under **`docs/backlog/`** at the workspace root (unless the user 
 
 ```csv
 id,title,level,status,reach,impact,confidence,effort,impact_slice,parent_links,blocks,blocked_by,ledger_ref,notes
-RICE-STORY-001,Title,Story,ready,120,2,80%,6 person-days,,,,,,"Notes…"
-RICE-TASK-NNN,Child task,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,,,,"Notes…"
+RICE-STORY-001,Title,Story,ready,120,2,80%,6,,,,,,"Notes…"
+RICE-TASK-NNN,Child task,Task,ready,,,90%,2,0.4,RICE-STORY-001:100%,,,,"Notes…"
 ```
 
 | Column | Root | Child (`parent_links`) |
 | --- | --- | --- |
 | `id`, `title`, `level`, `status` | required | required |
 | `reach`, `impact` | yes | leave empty (inherited) |
-| `confidence`, `effort` | yes | yes |
+| `confidence`, `effort` | yes (`effort` = days, number) | yes |
 | `impact_slice` | empty | yes when siblings share parent |
 | `parent_links` | empty | e.g. `RICE-STORY-001:100%` |
 | `blocks`, `blocked_by`, `ledger_ref`, `notes` | optional | optional |
@@ -153,7 +157,7 @@ id,task_id,start_date,end_date,start_time,end_time,status,notes
 ## Row template (quick append — child Task CSV line)
 
 ```csv
-RICE-TASK-NNN,Title,Task,intake,,,80%,3 person-days,0.4,RICE-STORY-001:100%,,,,"Notes…"
+RICE-TASK-NNN,Title,Task,intake,,,80%,3,0.4,RICE-STORY-001:100%,,,,"Notes…"
 ```
 
 ## Row template (quick append — execution CSV line)

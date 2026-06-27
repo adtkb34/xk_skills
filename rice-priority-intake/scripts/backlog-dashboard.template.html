@@ -7,17 +7,24 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.default.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/treeselectjs@0.13.1/dist/treeselectjs.css" />
   <style>
     :root {
-      --bg: #f7f9fc;
+      --bg: #f4f6fb;
       --panel: #ffffff;
-      --grid-dot: #d8dee9;
-      --text: #1a1f36;
-      --muted: #6b7280;
-      --border: #e5e7eb;
+      --grid-dot: #d5dbe8;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
       --shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
-      --accent: #2563eb;
-      --accent-soft: #eff6ff;
+      --shadow-lg: 0 24px 48px rgba(15, 23, 42, 0.12);
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --accent-soft: #eef2ff;
+      --accent-ring: rgba(79, 70, 229, 0.18);
       --ready: #059669;
       --progress: #d97706;
       --done: #64748b;
@@ -30,6 +37,10 @@
       --edge: #94a3b8;
       --edge-block: #f59e0b;
       --edge-parent: #64748b;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
@@ -42,23 +53,42 @@
     .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
     .topbar {
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
-      padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
-      box-shadow: 0 1px 0 rgba(15,23,42,0.04);
+      padding: 12px 20px; background: rgba(255,255,255,0.92); border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 0 rgba(15,23,42,0.04); backdrop-filter: blur(10px);
     }
     .brand h1 { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
     .brand p { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); }
-    .tabs { display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
+    .brand code { font-size: 0.72rem; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; }
+    .tabs { display: flex; gap: 4px; background: #f1f5f9; padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border); }
     .tab {
       border: none; background: transparent; color: var(--muted); font: inherit;
-      font-size: 0.82rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer;
+      transition: color .15s, background .15s, box-shadow .15s;
     }
+    .tab:hover { color: var(--text); }
     .tab.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .toolbar input, .toolbar select {
-      border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
-      font: inherit; font-size: 0.82rem; background: var(--panel);
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .toolbar-actions {
+      display: flex; gap: 6px; padding: 4px; background: #f8fafc; border: 1px solid var(--border);
+      border-radius: var(--radius-md);
     }
-    .toolbar input { min-width: 180px; }
+    .toolbar-filters {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .toolbar input, .toolbar select, .field-input {
+      border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px;
+      font: inherit; font-size: 0.84rem; background: #f8fafc; color: var(--text);
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .toolbar input:hover, .toolbar select:hover, .field-input:hover {
+      border-color: var(--border-strong); background: var(--panel);
+    }
+    .toolbar input:focus, .toolbar select:focus, .field-input:focus {
+      outline: none; border-color: var(--accent); background: var(--panel);
+      box-shadow: 0 0 0 3px var(--accent-ring);
+    }
+    .toolbar input { min-width: 200px; }
+    .toolbar input::placeholder, .field-input::placeholder { color: #94a3b8; }
     .main { position: relative; overflow: hidden; }
     .view { position: absolute; inset: 0; display: none; }
     .view.active { display: block; }
@@ -238,6 +268,119 @@
     .exec-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     .exec-table th, .exec-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
     .exec-table th { color: var(--muted); font-weight: 600; }
+
+    .toolbar .btn-primary {
+      border: none; background: var(--accent); color: #fff; font: inherit; font-size: 0.82rem;
+      font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    }
+    .toolbar .btn-primary:hover { background: #1d4ed8; }
+    .editor-hint { font-size: 0.75rem; color: var(--muted); margin: 4px 0 0; display: none; }
+    .editor-hint.visible { display: block; }
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg); width: min(540px, 100%); max-height: 90vh; overflow: auto;
+      padding: 24px 26px;
+    }
+    .modal h2 { margin: 0 0 18px; font-size: 1.08rem; font-weight: 700; letter-spacing: -0.02em; }
+    .modal-form { display: grid; gap: 14px; }
+    .modal-form label { display: grid; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+    .modal-form input, .modal-form select, .modal-form textarea {
+      font: inherit; font-size: 0.86rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 9px 11px; background: var(--panel); color: var(--text);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .modal-form input:hover, .modal-form select:hover, .modal-form textarea:hover {
+      border-color: var(--border-strong);
+    }
+    .modal-form input:focus, .modal-form select:focus, .modal-form textarea:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring);
+    }
+    .modal-form input:disabled, .modal-form select:disabled, .modal-form textarea:disabled {
+      background: #f8fafc; color: var(--muted); cursor: not-allowed;
+    }
+    .modal-form textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
+    .modal-form .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .effort-input-row { display: grid; grid-template-columns: 1fr minmax(148px, auto); gap: 10px; align-items: center; }
+    .effort-input-row input { min-width: 0; }
+    .effort-field-hint { font-size: 0.72rem; font-weight: 500; color: var(--muted); margin-top: 2px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; padding-top: 4px; }
+    .modal-actions button {
+      font: inherit; font-size: 0.84rem; font-weight: 600; padding: 9px 16px;
+      border-radius: var(--radius-sm); cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    .modal-actions button:active { transform: scale(0.98); }
+    .modal-actions .cancel {
+      border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    }
+    .modal-actions .cancel:hover { border-color: var(--border-strong); background: #f8fafc; }
+    .modal-actions .save { border: none; background: var(--accent); color: #fff; }
+    .modal-actions .save:hover { background: var(--accent-hover); }
+    .modal-error { color: #dc2626; font-size: 0.8rem; min-height: 1.2em; }
+    .modal-hint {
+      font-size: 0.75rem; color: var(--muted); margin: 0; line-height: 1.45;
+      padding: 10px 12px; background: var(--accent-soft); border-radius: var(--radius-sm);
+    }
+    /* Tom Select — match dashboard accent + Inter */
+    .modal-form .ts-wrapper { width: 100%; }
+    .modal-form .ts-wrapper .ts-control {
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      font-size: 0.86rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 7px 10px; min-height: 38px; box-shadow: none; background: var(--panel);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .modal-form .ts-wrapper:hover .ts-control { border-color: var(--border-strong); }
+    .modal-form .ts-wrapper.focus .ts-control,
+    .modal-form .ts-wrapper.dropdown-active .ts-control {
+      border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring);
+    }
+    .modal-form .ts-wrapper .ts-dropdown {
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg); margin-top: 4px;
+    }
+    .modal-form .ts-wrapper .ts-dropdown .option.active {
+      background: var(--accent-soft); color: var(--accent);
+    }
+    .modal-form .ts-wrapper .ts-dropdown .option:hover { background: #f1f5f9; }
+    .modal-form .ts-wrapper.multi .ts-control > div { background: var(--accent-soft); color: var(--accent); }
+    /* Flatpickr — match dashboard accent + Inter */
+    .flatpickr-calendar {
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg);
+    }
+    .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange,
+    .flatpickr-day.selected.inRange, .flatpickr-day.startRange.inRange, .flatpickr-day.endRange.inRange {
+      background: var(--accent); border-color: var(--accent);
+    }
+    .flatpickr-day:hover, .flatpickr-day:focus { background: var(--accent-soft); border-color: var(--accent-soft); }
+    .flatpickr-time input:hover, .flatpickr-time input:focus { background: var(--accent-soft); }
+    .flatpickr-months .flatpickr-month { color: var(--text); }
+    span.flatpickr-weekday { color: var(--muted); }
+    .btn-secondary {
+      border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit;
+      font-size: 0.78rem; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .exec-add-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    /* Treeselect — parent tree picker */
+    .modal-form .treeselect-input {
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      min-height: 38px; background: var(--panel); box-shadow: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .modal-form .treeselect-input:hover { border-color: var(--border-strong); }
+    .modal-form .treeselect-input--focused { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+    .modal-form .treeselect-list { border-color: var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); }
+    .modal-form .treeselect-list__item--checked { background: var(--accent-soft); }
+    .modal-form .treeselect-list__item--focused { background: #f1f5f9; }
+    .parent-tree-wrap.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -246,6 +389,7 @@
       <div class="brand">
         <h1>Priority Intake</h1>
         <p>__SOURCE__ · __GENERATED_AT__</p>
+        <p id="editor-hint" class="editor-hint">Read-only. Run <code>build_html.py --serve docs/backlog</code> to add items, executions, and save CSV.</p>
       </div>
       <div class="tabs" role="tablist">
         <button class="tab active" data-view="flow" type="button">Flow</button>
@@ -255,6 +399,8 @@
         <button class="tab" data-view="decisions" type="button">Decisions</button>
       </div>
       <div class="toolbar">
+        <button type="button" id="add-item-btn" class="btn-primary" hidden>Add item</button>
+        <button type="button" id="add-execution-btn" class="btn-primary" hidden>Add execution</button>
         <select id="filter-level"><option value="">All levels</option><option>Epic</option><option>Feature</option><option>Story</option><option>Task</option></select>
         <input type="search" id="search" placeholder="Search…" />
       </div>
@@ -321,8 +467,114 @@
     </div>
     <div class="drawer-body" id="drawer-body"></div>
   </aside>
+  <div class="modal-backdrop" id="item-modal-backdrop">
+    <div class="modal" role="dialog" aria-labelledby="item-modal-title">
+      <h2 id="item-modal-title">Add backlog item</h2>
+      <form class="modal-form" id="item-form">
+        <label>Title *
+          <input name="title" required autocomplete="off" />
+        </label>
+        <div class="row-2">
+          <label>Level
+            <select name="level">
+              <option value="Epic">Epic</option><option value="Feature">Feature</option><option value="Story">Story</option><option value="Task" selected>Task</option>
+            </select>
+          </label>
+          <label>Status
+            <select name="status">
+              <option value="intake" selected>intake</option><option value="ready">ready</option><option value="in-progress">in-progress</option><option value="deferred">deferred</option><option value="done">done</option>
+            </select>
+          </label>
+        </div>
+        <div class="row-2" id="rice-fields">
+          <label>Reach
+            <input name="reach" type="number" min="0" step="1" placeholder="e.g. 500" />
+          </label>
+          <label>Impact
+            <select name="impact">
+              <option value="">—</option><option>0.25</option><option>0.5</option><option>1</option><option>2</option><option>3</option>
+            </select>
+          </label>
+        </div>
+        <div class="row-2">
+          <label>Confidence
+            <select name="confidence">
+              <option value="">—</option><option>1.0</option><option>0.8</option><option>0.5</option>
+            </select>
+          </label>
+          <label>Effort
+            <div class="effort-input-row">
+              <input name="effort_amount" type="number" min="0" step="0.5" placeholder="e.g. 2" autocomplete="off" />
+              <select name="effort_unit" id="effort-unit-select">
+                <option value="days">days</option>
+                <option value="weeks">weeks</option>
+                <option value="months">months</option>
+              </select>
+            </div>
+            <span class="effort-field-hint">Saved as days (number) in CSV — 1 week = 7 days, 1 month = 30 days</span>
+          </label>
+        </div>
+        <label id="parent-tree-wrap" class="parent-tree-wrap">Parent
+          <div id="parent-tree-container"></div>
+          <input type="hidden" name="parent_links" id="parent-links-hidden" value="" />
+        </label>
+        <label>Notes
+          <textarea name="notes"></textarea>
+        </label>
+        <p class="modal-error" id="item-form-error"></p>
+        <div class="modal-actions">
+          <button type="button" class="cancel" id="item-modal-cancel">Cancel</button>
+          <button type="submit" class="save">Save to CSV</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="execution-modal-backdrop">
+    <div class="modal" role="dialog" aria-labelledby="execution-modal-title">
+      <h2 id="execution-modal-title">Add execution / schedule</h2>
+      <form class="modal-form" id="execution-form">
+        <label>Task *
+          <select name="task_id" id="execution-task-select" required></select>
+        </label>
+        <p class="modal-hint">Set <strong>start date</strong> or <strong>end date</strong>, not both. Range is computed from the task's Effort.</p>
+        <div class="row-2">
+          <label>Start date
+            <input name="start_date" placeholder="YYYY-MM-DD or YYYY-MM-DDTHH:MM" autocomplete="off" />
+          </label>
+          <label>End date
+            <input name="end_date" placeholder="YYYY-MM-DD or YYYY-MM-DDTHH:MM" autocomplete="off" />
+          </label>
+        </div>
+        <div class="row-2">
+          <label>Start time
+            <input name="start_time" placeholder="HH:MM" autocomplete="off" />
+          </label>
+          <label>End time
+            <input name="end_time" placeholder="HH:MM" autocomplete="off" />
+          </label>
+        </div>
+        <label>Status
+          <select name="status">
+            <option value="pending" selected>pending</option><option value="running">running</option><option value="success">success</option><option value="failed">failed</option><option value="cancelled">cancelled</option>
+          </select>
+        </label>
+        <label>Notes
+          <textarea name="notes"></textarea>
+        </label>
+        <p class="modal-error" id="execution-form-error"></p>
+        <div class="modal-actions">
+          <button type="button" class="cancel" id="execution-modal-cancel">Cancel</button>
+          <button type="submit" class="save">Save to CSV</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/treeselectjs@0.13.1/dist/treeselectjs.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
   <script>
-    const DATA = __DATA_JSON__;
+    const EDITOR_ENABLED = __EDITOR_ENABLED__;
+    let DATA = __DATA_JSON__;
     const LEVEL_COLOR = { Epic: 'var(--epic)', Feature: 'var(--feature)', Story: 'var(--story)', Task: 'var(--task)' };
     const BOARD_COLS = [
       { key: 'ready', label: 'Ready' },
@@ -382,6 +634,53 @@
         const m = p.trim().match(/^(RICE-[A-Z]+-\d+)(?::(\d+)%)?$/);
         return m ? { id: m[1], pct: m[2] ? Number(m[2]) : 100 } : null;
       }).filter(Boolean);
+    }
+
+    const LEVEL_ORDER = ['Epic', 'Feature', 'Story', 'Task'];
+    const DEFAULT_EFFORT_UNIT = { Epic: 'months', Feature: 'weeks', Story: 'days', Task: 'days' };
+
+    function effortUnitForLevel(level) {
+      return DEFAULT_EFFORT_UNIT[level] || 'days';
+    }
+
+    function eligibleParentLevels(childLevel) {
+      const idx = LEVEL_ORDER.indexOf(childLevel);
+      if (idx <= 0) return [];
+      return LEVEL_ORDER.slice(0, idx);
+    }
+
+    function buildParentTreeOptions(items, childLevel) {
+      const allowedLevels = eligibleParentLevels(childLevel);
+      if (!allowedLevels.length) return [];
+
+      const pool = items.filter(i => allowedLevels.includes(i.level));
+      const poolIds = new Set(pool.map(i => i.id));
+      const childrenMap = new Map();
+      pool.forEach(item => {
+        const parentId = parseParentLinks(item.parents).map(p => p.id).find(id => poolIds.has(id)) || '__root__';
+        if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+        childrenMap.get(parentId).push(item);
+      });
+
+      function toOptions(parentKey) {
+        return (childrenMap.get(parentKey) || [])
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map(item => ({
+            name: `[${item.level}] ${item.title}`,
+            value: item.id,
+            children: toOptions(item.id),
+          }));
+      }
+      return toOptions('__root__');
+    }
+
+    function tomSelectValue(el) {
+      if (!el) return '';
+      if (el.tomselect) {
+        const v = el.tomselect.getValue();
+        return Array.isArray(v) ? (v[0] || '') : (v || '');
+      }
+      return el.value || '';
     }
 
     function parseIdList(raw) {
@@ -690,9 +989,15 @@
           <td>${ex.status || '—'}</td>
           <td>${ex.notes || '—'}</td>
         </tr>`).join('')
-        : '<tr><td colspan="4" style="color:var(--muted)">None — add rows in .executions.csv</td></tr>';
+        : '<tr><td colspan="4" style="color:var(--muted)">None — add an execution below</td></tr>';
+      const addBtn = EDITOR_ENABLED
+        ? `<button type="button" class="btn-secondary btn-add-exec" data-task-id="${item.id}">Add execution</button>`
+        : '';
       return `<div class="executions-box">
-        <strong>Executions / schedule</strong> (<code>.executions.csv</code>)
+        <div class="exec-add-row">
+          <div><strong>Executions / schedule</strong> (<code>.executions.csv</code>)</div>
+          ${addBtn}
+        </div>
         <table class="exec-table"><thead><tr><th>ID</th><th>Schedule</th><th>Status</th><th>Notes</th></tr></thead><tbody>${body}</tbody></table>
       </div>`;
     }
@@ -728,6 +1033,9 @@
         ${item.notes ? `<div class="notes-box">${item.notes}</div>` : ''}`;
       document.getElementById('drawer').classList.add('open');
       document.getElementById('drawer-backdrop').classList.add('open');
+      document.getElementById('drawer-body').querySelectorAll('.btn-add-exec').forEach(btn => {
+        btn.addEventListener('click', () => openExecutionModal(btn.dataset.taskId));
+      });
       renderFlow();
     }
 
@@ -825,6 +1133,418 @@
       document.getElementById('drawer-backdrop').classList.remove('open');
     }
 
+    async function reloadData(payload) {
+      const keepId = selectedId;
+      if (payload) {
+        DATA.items = payload.items;
+        DATA.summary = payload.summary;
+        DATA.decisions = payload.decisions || [];
+        DATA.implementationOrder = payload.implementationOrder || '';
+      } else {
+        const res = await fetch('/api/data');
+        if (!res.ok) throw new Error('Failed to reload data');
+        const data = await res.json();
+        DATA.items = data.items;
+        DATA.summary = data.summary;
+        DATA.decisions = data.decisions || [];
+        DATA.implementationOrder = data.implementationOrder || '';
+      }
+      applyFilters();
+      renderDecisions();
+      if (keepId && DATA.items.some(i => i.id === keepId)) {
+        openDrawer(keepId);
+      }
+    }
+
+    function populateExecutionTaskSelect(selectEl, selectedId) {
+      selectEl.innerHTML = DATA.items.map(item =>
+        `<option value="${item.id}">${item.id} — ${escapeHtml(item.title)}</option>`
+      ).join('');
+      if (selectedId) selectEl.value = selectedId;
+    }
+
+    function initEditor() {
+      const addItemBtn = document.getElementById('add-item-btn');
+      const addExecBtn = document.getElementById('add-execution-btn');
+      const hint = document.getElementById('editor-hint');
+      const itemBackdrop = document.getElementById('item-modal-backdrop');
+      const itemForm = document.getElementById('item-form');
+      const itemErrorEl = document.getElementById('item-form-error');
+      const execBackdrop = document.getElementById('execution-modal-backdrop');
+      const execForm = document.getElementById('execution-form');
+      const execErrorEl = document.getElementById('execution-form-error');
+      const execTaskSelect = document.getElementById('execution-task-select');
+
+      let itemTomSelects = [];
+      let levelTomSelect = null;
+      let parentTreeselect = null;
+      let execTaskTomSelect = null;
+      let execStatusTomSelect = null;
+      const execFlatpickrs = {};
+
+      function destroyTomSelectEl(el) {
+        if (el && el.tomselect) el.tomselect.destroy();
+      }
+
+      function destroyTomSelects(instances) {
+        instances.forEach(ts => { if (ts) ts.destroy(); });
+        instances.length = 0;
+      }
+
+      function destroyFlatpickrEl(el) {
+        if (el && el._flatpickr) el._flatpickr.destroy();
+      }
+
+      function setTomSelectField(name, value) {
+        const el = itemForm.querySelector(`[name="${name}"]`);
+        if (!el) return;
+        el.value = value;
+        if (el.tomselect) el.tomselect.setValue(value, true);
+      }
+
+      function createTomSelect(el, options = {}) {
+        if (!el) return null;
+        destroyTomSelectEl(el);
+        return new TomSelect(el, {
+          allowEmptyOption: true,
+          create: false,
+          ...options,
+        });
+      }
+
+      function destroyParentTreeselect() {
+        if (parentTreeselect) {
+          parentTreeselect.destroy();
+          parentTreeselect = null;
+        }
+        const container = document.getElementById('parent-tree-container');
+        if (container) container.innerHTML = '';
+        const hidden = document.getElementById('parent-links-hidden');
+        if (hidden) hidden.value = '';
+      }
+
+      function onParentTreeInput(e) {
+        const raw = e.detail;
+        const id = Array.isArray(raw) ? (raw[0] || '') : (raw || '');
+        document.getElementById('parent-links-hidden').value = id || '';
+        toggleRiceFields();
+      }
+
+      function initParentTreeselect(level) {
+        destroyParentTreeselect();
+        const wrap = document.getElementById('parent-tree-wrap');
+        const container = document.getElementById('parent-tree-container');
+        const allowed = eligibleParentLevels(level);
+
+        if (!allowed.length) {
+          wrap.classList.add('hidden');
+          toggleRiceFields();
+          return;
+        }
+        wrap.classList.remove('hidden');
+
+        const options = buildParentTreeOptions(DATA.items, level);
+        if (!options.length) {
+          container.innerHTML = '<p class="modal-hint" style="margin:0">No eligible parents in backlog yet.</p>';
+          toggleRiceFields();
+          return;
+        }
+
+        parentTreeselect = new Treeselect({
+          parentHtmlContainer: container,
+          options,
+          value: '',
+          isSingleSelect: true,
+          showTags: false,
+          placeholder: 'Select parent…',
+          searchable: true,
+          clearable: true,
+          appendToBody: true,
+          openLevel: 1,
+        });
+        parentTreeselect.srcElement.addEventListener('input', onParentTreeInput);
+      }
+
+      function normalizeDateValue(dateStr, instance) {
+        if (!dateStr) return;
+        if (dateStr.endsWith(' 00:00')) {
+          instance.setDate(dateStr.slice(0, 10), false, 'Y-m-d');
+        }
+      }
+
+      function createDateFlatpickr(el, onChange) {
+        if (!el) return null;
+        destroyFlatpickrEl(el);
+        return flatpickr(el, {
+          enableTime: true,
+          time_24hr: true,
+          allowInput: true,
+          dateFormat: 'Y-m-d H:i',
+          onChange: () => { if (onChange) onChange(); },
+          onClose: (_dates, dateStr, instance) => {
+            normalizeDateValue(dateStr, instance);
+            if (onChange) onChange();
+          },
+        });
+      }
+
+      function createTimeFlatpickr(el) {
+        if (!el) return null;
+        destroyFlatpickrEl(el);
+        return flatpickr(el, {
+          enableTime: true,
+          noCalendar: true,
+          time_24hr: true,
+          allowInput: true,
+          dateFormat: 'H:i',
+        });
+      }
+
+      function destroyItemFormWidgets() {
+        destroyTomSelects(itemTomSelects);
+        destroyParentTreeselect();
+        levelTomSelect = null;
+      }
+
+      function initItemFormWidgets() {
+        destroyItemFormWidgets();
+
+        levelTomSelect = createTomSelect(itemForm.querySelector('[name="level"]'));
+        if (levelTomSelect) {
+          itemTomSelects.push(levelTomSelect);
+          levelTomSelect.on('change', value => {
+            initParentTreeselect(value);
+            setEffortUnitForLevel(value, true);
+            toggleRiceFields();
+          });
+        }
+
+        ['status', 'impact', 'confidence'].forEach(name => {
+          const el = itemForm.querySelector(`[name="${name}"]`);
+          const ts = createTomSelect(el);
+          if (ts) itemTomSelects.push(ts);
+        });
+      }
+
+      function setEffortUnitForLevel(level, force = false) {
+        const unitEl = itemForm.querySelector('[name="effort_unit"]');
+        if (!unitEl) return;
+        const target = effortUnitForLevel(level);
+        if (force || unitEl.dataset.userSet !== '1') {
+          unitEl.value = target;
+        }
+      }
+
+      function setItemFormDefaults() {
+        setTomSelectField('level', 'Task');
+        setTomSelectField('status', 'intake');
+        setTomSelectField('impact', '');
+        setTomSelectField('confidence', '');
+        const unitEl = itemForm.querySelector('[name="effort_unit"]');
+        if (unitEl) {
+          unitEl.dataset.userSet = '';
+          unitEl.value = effortUnitForLevel('Task');
+        }
+        itemForm.querySelector('[name="effort_amount"]').value = '';
+        initParentTreeselect('Task');
+      }
+
+      function getItemFormBody() {
+        const level = tomSelectValue(itemForm.querySelector('[name="level"]')) || 'Task';
+        const effortAmount = itemForm.querySelector('[name="effort_amount"]').value;
+        const effortUnit = itemForm.querySelector('[name="effort_unit"]').value || effortUnitForLevel(level);
+        return {
+          title: itemForm.querySelector('[name="title"]').value.trim(),
+          level,
+          status: tomSelectValue(itemForm.querySelector('[name="status"]')) || 'intake',
+          reach: itemForm.querySelector('[name="reach"]').value,
+          impact: tomSelectValue(itemForm.querySelector('[name="impact"]')),
+          confidence: tomSelectValue(itemForm.querySelector('[name="confidence"]')),
+          effort_amount: effortAmount,
+          effort_unit: effortUnit,
+          parent_links: document.getElementById('parent-links-hidden').value.trim(),
+          notes: itemForm.querySelector('[name="notes"]').value,
+        };
+      }
+
+      function destroyExecFormWidgets() {
+        if (execTaskTomSelect) {
+          execTaskTomSelect.destroy();
+          execTaskTomSelect = null;
+        }
+        if (execStatusTomSelect) {
+          execStatusTomSelect.destroy();
+          execStatusTomSelect = null;
+        }
+        destroyTomSelectEl(execForm.querySelector('[name="status"]'));
+        Object.keys(execFlatpickrs).forEach(key => {
+          const fp = execFlatpickrs[key];
+          if (fp) fp.destroy();
+          delete execFlatpickrs[key];
+        });
+      }
+
+      function initExecFormWidgets(taskId) {
+        destroyExecFormWidgets();
+        populateExecutionTaskSelect(execTaskSelect, taskId || '');
+        execTaskTomSelect = createTomSelect(execTaskSelect, { placeholder: 'Select a task…' });
+        execStatusTomSelect = createTomSelect(execForm.querySelector('[name="status"]'));
+        if (execStatusTomSelect) execStatusTomSelect.setValue('pending', true);
+
+        const onDateChange = () => toggleDateExclusivity();
+        execFlatpickrs.startDate = createDateFlatpickr(execForm.querySelector('[name="start_date"]'), onDateChange);
+        execFlatpickrs.endDate = createDateFlatpickr(execForm.querySelector('[name="end_date"]'), onDateChange);
+        execFlatpickrs.startTime = createTimeFlatpickr(execForm.querySelector('[name="start_time"]'));
+        execFlatpickrs.endTime = createTimeFlatpickr(execForm.querySelector('[name="end_time"]'));
+      }
+
+      function getExecFormBody() {
+        return {
+          task_id: tomSelectValue(execForm.querySelector('[name="task_id"]')),
+          start_date: execForm.querySelector('[name="start_date"]').value,
+          end_date: execForm.querySelector('[name="end_date"]').value,
+          start_time: execForm.querySelector('[name="start_time"]').value,
+          end_time: execForm.querySelector('[name="end_time"]').value,
+          status: tomSelectValue(execForm.querySelector('[name="status"]')) || 'pending',
+          notes: execForm.querySelector('[name="notes"]').value,
+        };
+      }
+
+      function setFlatpickrDisabled(fp, disabled) {
+        if (!fp) return;
+        fp.set('clickOpens', !disabled);
+        fp._input.disabled = disabled;
+        if (disabled) fp.clear();
+      }
+
+      function toggleDateExclusivity() {
+        const start = execForm.querySelector('[name="start_date"]');
+        const end = execForm.querySelector('[name="end_date"]');
+        const hasStart = start.value.trim();
+        const hasEnd = end.value.trim();
+        end.disabled = !!hasStart;
+        start.disabled = !!hasEnd;
+        setFlatpickrDisabled(execFlatpickrs.endDate, !!hasStart);
+        setFlatpickrDisabled(execFlatpickrs.startDate, !!hasEnd);
+      }
+
+      function openItemModal() {
+        itemErrorEl.textContent = '';
+        destroyItemFormWidgets();
+        itemForm.reset();
+        initItemFormWidgets();
+        setItemFormDefaults();
+        toggleRiceFields();
+        itemBackdrop.classList.add('open');
+        itemForm.querySelector('[name="title"]').focus();
+      }
+
+      function openExecutionModal(taskId) {
+        if (!DATA.items.length) {
+          alert('Add an item before scheduling executions.');
+          return;
+        }
+        execErrorEl.textContent = '';
+        destroyExecFormWidgets();
+        execForm.reset();
+        initExecFormWidgets(taskId || '');
+        toggleDateExclusivity();
+        execBackdrop.classList.add('open');
+        if (execTaskTomSelect) execTaskTomSelect.focus();
+        else execTaskSelect.focus();
+      }
+
+      if (EDITOR_ENABLED) {
+        addItemBtn.hidden = false;
+        addExecBtn.hidden = false;
+        addItemBtn.addEventListener('click', openItemModal);
+        addExecBtn.addEventListener('click', () => openExecutionModal(''));
+      } else {
+        hint.classList.add('visible');
+      }
+
+      window.openExecutionModal = openExecutionModal;
+
+      function closeItemModal() {
+        destroyItemFormWidgets();
+        itemBackdrop.classList.remove('open');
+      }
+      function closeExecModal() {
+        destroyExecFormWidgets();
+        execBackdrop.classList.remove('open');
+        execForm.querySelector('[name="start_date"]').disabled = false;
+        execForm.querySelector('[name="end_date"]').disabled = false;
+      }
+      document.getElementById('item-modal-cancel').onclick = closeItemModal;
+      itemBackdrop.addEventListener('click', e => { if (e.target === itemBackdrop) closeItemModal(); });
+      document.getElementById('execution-modal-cancel').onclick = closeExecModal;
+      execBackdrop.addEventListener('click', e => { if (e.target === execBackdrop) closeExecModal(); });
+
+      function toggleRiceFields() {
+        const hasParent = document.getElementById('parent-links-hidden').value.trim();
+        const riceFields = document.getElementById('rice-fields');
+        riceFields.style.opacity = hasParent ? '0.5' : '1';
+        riceFields.querySelectorAll('input, select').forEach(el => {
+          el.disabled = !!hasParent;
+          if (el.tomselect) {
+            if (hasParent) el.tomselect.disable();
+            else el.tomselect.enable();
+          }
+        });
+        const effortAmount = itemForm.querySelector('[name="effort_amount"]');
+        const effortUnit = itemForm.querySelector('[name="effort_unit"]');
+        if (effortAmount) effortAmount.disabled = false;
+        if (effortUnit) effortUnit.disabled = false;
+      }
+
+      const effortUnitSelect = itemForm.querySelector('[name="effort_unit"]');
+      if (effortUnitSelect) {
+        effortUnitSelect.addEventListener('change', () => { effortUnitSelect.dataset.userSet = '1'; });
+      }
+
+      itemForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!EDITOR_ENABLED) return;
+        itemErrorEl.textContent = '';
+        const body = getItemFormBody();
+        try {
+          const res = await fetch('/api/items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload.error || 'Save failed');
+          await reloadData(payload);
+          closeItemModal();
+        } catch (err) {
+          itemErrorEl.textContent = err.message || String(err);
+        }
+      });
+
+      execForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!EDITOR_ENABLED) return;
+        execErrorEl.textContent = '';
+        const body = getExecFormBody();
+        try {
+          const res = await fetch('/api/executions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload.error || 'Save failed');
+          const taskId = body.task_id;
+          selectedId = taskId;
+          await reloadData(payload);
+          closeExecModal();
+        } catch (err) {
+          execErrorEl.textContent = err.message || String(err);
+        }
+      });
+    }
+
     function applyFilters() {
       const lv = document.getElementById('filter-level').value;
       const q = document.getElementById('search').value.trim().toLowerCase();
@@ -890,6 +1610,7 @@
       renderCalendar();
     };
 
+    initEditor();
     renderDecisions();
     applyFilters();
     fitView();

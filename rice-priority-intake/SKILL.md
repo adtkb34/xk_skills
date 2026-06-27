@@ -50,6 +50,8 @@ After user approval, create `docs/backlog/` and template files (`priority-intake
 
 **Maintenance rules**: edit `.md` (raw fields) only; run `build_html.py` after changes to refresh HTML. **Do not** write RICE/Score/Summary into md; **do not** hand-edit `.html`.
 
+**No backward compatibility in code** — when schema or formats change, implement the new shape only and migrate existing `.csv` / `.md` in a separate data-cleanup pass (user delegates to AI). Do **not** add legacy parsers, dual paths, or fallback branches in `build_html.py` or the dashboard to support old rows.
+
 ## Viewing the backlog
 
 **See what tasks exist**
@@ -68,6 +70,16 @@ Output defaults to `docs/backlog/priority-intake-backlog.html`. Specify output p
 ```bash
 python .cursor/skills/rice-priority-intake/scripts/build_html.py docs/backlog -o path/to/report.html
 ```
+
+**Add items from the HTML UI (saves to `.items.csv`)**
+
+Browsers cannot write local files when opening HTML as `file://`. Use the built-in server:
+
+```bash
+python .cursor/skills/rice-priority-intake/scripts/build_html.py docs/backlog --serve
+```
+
+Opens `http://127.0.0.1:8765/` with **Add item** and **Add execution** buttons; each save appends a row to `.items.csv` or `.executions.csv` and rebuilds the HTML. Optional port: `--port 9000`.
 
 After user approves a write, run the script above and share the HTML path. User can open in browser or via `open_resource`.
 
@@ -145,7 +157,7 @@ Ask only what you cannot infer from codebase + `core-feature-ledger.md` + `prd.m
 | Reach | How many users/sessions/events per quarter? |
 | Impact | 3=massive … 0.25=minimal (see reference) |
 | Confidence | 100% / 80% / 50% — what evidence supports this? |
-| Effort | Person-weeks or person-months to ship |
+| Effort | Weeks or months to ship (stored as days in CSV) |
 
 **Story / Task — no `parent_links`** — abbreviated interview (all four dimensions):
 
@@ -173,7 +185,7 @@ Always ask: **blocked by?** / **blocks?** / **deadline or season?**
 RICE = (Reach × Impact × Confidence%) / Effort
 ```
 
-Effort minimum: **0.5 person-day** for Task, **0.5 person-week** for Story+.
+Effort minimum: **0.5 day** for Task, **3.5 days** (0.5 week) for Story+.
 
 **Attributed inheritance** (child `C`, parents `P1…Pn`, splits `a1…an`, Σai = 100):
 
@@ -265,7 +277,7 @@ Ask: need calendar? **start date** or **deadline**? Append rows to `.executions.
 |---|---|
 | Where | **Only** `priority-intake-backlog.executions.csv` — **never** `start_date`/`end_date` on item rows |
 | Anchor | Set **only** `start_date` **or** `end_date` per row (`YYYY-MM-DD`), not both |
-| `start_date` | Linked task must have parseable `Effort` (person-days) |
+| `start_date` | Linked task must have `effort` ≥ 0.5 (days) |
 | `end_date` | `Effort` optional — milestone if omitted; range if present |
 | Multiple runs | One execution row per run/slot (same `task_id`) |
 | No rows | Task omitted from calendar; listed under "Unscheduled" |
@@ -326,7 +338,7 @@ Stop and ask the user when:
 
 - P0 in ledger but RICE bottom quartile
 - Multi-parent splits unclear and effort differs 3×+ by parent
-- Effort > 2 person-months at Feature+ without Epic parent
+- Effort > 60 days (~2 months) at Feature+ without Epic parent
 - Duplicate or overlaps existing backlog ID
 
 ## Additional resources
