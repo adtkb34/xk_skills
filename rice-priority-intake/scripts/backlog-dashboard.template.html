@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Priority Intake</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --panel: #ffffff;
+      --grid-dot: #d8dee9;
+      --text: #1a1f36;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --ready: #059669;
+      --progress: #d97706;
+      --done: #64748b;
+      --deferred: #7c3aed;
+      --intake: #0891b2;
+      --epic: #7c3aed;
+      --feature: #2563eb;
+      --story: #0891b2;
+      --task: #16a34a;
+      --edge: #94a3b8;
+      --edge-block: #f59e0b;
+      --edge-parent: #64748b;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 0 rgba(15,23,42,0.04);
+    }
+    .brand h1 { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+    .brand p { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); }
+    .tabs { display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
+    .tab {
+      border: none; background: transparent; color: var(--muted); font: inherit;
+      font-size: 0.82rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    }
+    .tab.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .toolbar input, .toolbar select {
+      border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+      font: inherit; font-size: 0.82rem; background: var(--panel);
+    }
+    .toolbar input { min-width: 180px; }
+    .main { position: relative; overflow: hidden; }
+    .view { position: absolute; inset: 0; display: none; }
+    .view.active { display: block; }
+
+    /* Flow canvas — React Flow inspired */
+    .flow-wrap { width: 100%; height: 100%; position: relative; overflow: hidden; }
+    .flow-canvas {
+      width: 100%; height: 100%; cursor: grab;
+      background-color: var(--bg);
+      background-image: radial-gradient(circle, var(--grid-dot) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .flow-canvas.dragging { cursor: grabbing; }
+    .flow-stage { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+    .flow-edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+    .flow-edges path { fill: none; stroke-width: 2; }
+    .flow-edges .edge-parent { stroke: var(--edge-parent); }
+    .flow-edges .edge-block { stroke: var(--edge-block); stroke-dasharray: 6 4; }
+    .flow-edges .edge-blocked { stroke: #ef4444; stroke-dasharray: 4 4; }
+    .flow-nodes { position: relative; }
+    .flow-node {
+      position: absolute; width: 260px; background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: var(--shadow); cursor: grab; user-select: none;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .flow-node.dragging-node { cursor: grabbing; z-index: 20; box-shadow: 0 12px 40px rgba(37,99,235,0.18); }
+    .flow-node:hover, .flow-node.selected { border-color: var(--accent); box-shadow: 0 8px 30px rgba(37,99,235,0.12); }
+    .flow-node .stripe { height: 4px; border-radius: 12px 12px 0 0; }
+    .flow-node .body { padding: 12px 14px 14px; }
+    .flow-node .id { font-size: 0.7rem; font-weight: 600; color: var(--muted); font-family: ui-monospace, monospace; }
+    .flow-node h3 { margin: 4px 0 8px; font-size: 0.92rem; line-height: 1.35; font-weight: 600; }
+    .flow-node .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .flow-node .rice { margin-left: auto; font-weight: 700; font-size: 1.1rem; }
+    .handle {
+      position: absolute; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--panel); border: 2px solid var(--accent);
+    }
+    .handle.top { top: -5px; left: 50%; transform: translateX(-50%); }
+    .handle.bottom { bottom: -5px; left: 50%; transform: translateX(-50%); }
+    .flow-controls {
+      position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .flow-controls button, .legend-toggle {
+      width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--panel); cursor: pointer; font-size: 1rem; color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .legend {
+      position: absolute; left: 16px; bottom: 16px; background: var(--panel);
+      border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+      font-size: 0.75rem; color: var(--muted); box-shadow: var(--shadow);
+    }
+    .legend div { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+    .legend .line { width: 24px; height: 0; border-top: 2px solid var(--edge-parent); }
+    .legend .line.block { border-color: var(--edge-block); border-style: dashed; }
+    .legend .line.blocked { border-color: #ef4444; border-style: dashed; }
+
+    /* Rank table */
+    .rank-wrap { padding: 20px; overflow: auto; height: 100%; }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+    th { background: #f8fafc; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbfc; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.82rem; color: var(--accent); }
+
+    /* Kanban */
+    .board-wrap { display: flex; gap: 14px; padding: 20px; height: 100%; overflow-x: auto; align-items: stretch; }
+    .board-col {
+      flex: 0 0 280px; background: #f1f5f9; border-radius: 14px; padding: 12px;
+      display: flex; flex-direction: column; max-height: 100%;
+    }
+    .board-col h3 { margin: 0 0 10px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .board-col .count { font-weight: 400; opacity: 0.7; }
+    .board-cards { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; flex: 1; }
+    .board-card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .board-card:hover { border-color: var(--accent); }
+    .board-card .title { font-weight: 600; font-size: 0.88rem; margin: 4px 0; }
+    .board-card .rice { font-weight: 700; color: var(--accent); }
+
+    /* Decisions */
+    .decisions-wrap { padding: 20px; overflow: auto; height: 100%; max-width: 900px; }
+    .decision-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+    .decision-list li {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; box-shadow: var(--shadow); line-height: 1.5;
+    }
+    .decision-list strong { color: var(--accent); }
+    .order-note { margin-top: 16px; padding: 12px 14px; background: var(--accent-soft); border-radius: 10px; font-size: 0.9rem; }
+
+    /* Detail drawer */
+    .drawer-backdrop {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.25); opacity: 0; pointer-events: none;
+      transition: opacity .2s; z-index: 40;
+    }
+    .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+    .drawer {
+      position: fixed; top: 0; right: 0; width: min(420px, 100vw); height: 100%;
+      background: var(--panel); border-left: 1px solid var(--border); box-shadow: -8px 0 40px rgba(0,0,0,0.08);
+      transform: translateX(100%); transition: transform .25s ease; z-index: 50;
+      display: flex; flex-direction: column;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer-head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+    .drawer-head h2 { margin: 0; font-size: 1.05rem; line-height: 1.35; }
+    .drawer-close { border: none; background: #f1f5f9; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; }
+    .drawer-body { padding: 16px 20px 24px; overflow-y: auto; flex: 1; }
+    .kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; font-size: 0.86rem; margin-bottom: 16px; }
+    .kv .k { color: var(--muted); }
+    .notes-box { background: #f8fafc; border-radius: 10px; padding: 12px; font-size: 0.86rem; line-height: 1.55; color: #374151; }
+
+    .badge {
+      display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px;
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .level-Epic { background: #ede9fe; color: var(--epic); }
+    .level-Feature { background: #dbeafe; color: var(--feature); }
+    .level-Story { background: #cffafe; color: var(--story); }
+    .level-Task { background: #dcfce7; color: var(--task); }
+    .status-ready { background: #d1fae5; color: var(--ready); }
+    .status-progress { background: #ffedd5; color: var(--progress); }
+    .status-done { background: #f1f5f9; color: var(--done); }
+    .status-deferred { background: #ede9fe; color: var(--deferred); }
+    .status-intake { background: #cffafe; color: var(--intake); }
+    .hidden { display: none !important; }
+
+    /* Calendar */
+    .calendar-wrap { padding: 20px; height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
+    .cal-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .cal-toolbar h2 { margin: 0; font-size: 1.1rem; min-width: 140px; }
+    .cal-toolbar button {
+      border: 1px solid var(--border); background: var(--panel); border-radius: 8px;
+      padding: 6px 12px; cursor: pointer; font: inherit; font-size: 0.85rem;
+    }
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 8px; box-shadow: var(--shadow);
+    }
+    .cal-dow { text-align: center; font-size: 0.72rem; color: var(--muted); font-weight: 600; padding: 6px 0; }
+    .cal-cell {
+      min-height: 88px; border: 1px solid #f1f5f9; border-radius: 8px; padding: 4px;
+      background: #fafbfc; font-size: 0.72rem;
+    }
+    .cal-cell.outside { opacity: 0.45; }
+    .cal-cell.today { border-color: var(--accent); background: var(--accent-soft); }
+    .cal-day-num { font-weight: 600; color: var(--muted); margin-bottom: 4px; font-size: 0.7rem; }
+    .cal-chip {
+      display: block; margin-top: 3px; padding: 2px 4px; border-radius: 4px;
+      color: #fff; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 0.65rem; line-height: 1.3;
+    }
+    .cal-chip.invalid { background: #ef4444 !important; }
+    .cal-chip.milestone { border-radius: 999px; text-align: center; }
+    .cal-unscheduled {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 14px; box-shadow: var(--shadow);
+    }
+    .cal-unscheduled h3 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); }
+    .cal-unscheduled ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .cal-unscheduled li { font-size: 0.85rem; cursor: pointer; }
+    .cal-unscheduled li:hover { color: var(--accent); }
+    .computed-box {
+      background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px;
+      padding: 12px; font-size: 0.86rem; margin-bottom: 16px; line-height: 1.55;
+    }
+    .computed-box .warn { color: #b45309; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Priority Intake</h1>
+        <p>__SOURCE__ · __GENERATED_AT__</p>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-view="flow" type="button">流程图</button>
+        <button class="tab" data-view="rank" type="button">优先级</button>
+        <button class="tab" data-view="board" type="button">看板</button>
+        <button class="tab" data-view="calendar" type="button">日历</button>
+        <button class="tab" data-view="decisions" type="button">决策</button>
+      </div>
+      <div class="toolbar">
+        <select id="filter-level"><option value="">全部层级</option><option>Epic</option><option>Feature</option><option>Story</option><option>Task</option></select>
+        <input type="search" id="search" placeholder="搜索…" />
+      </div>
+    </header>
+    <main class="main">
+      <section class="view active" id="view-flow">
+        <div class="flow-wrap">
+          <div class="flow-canvas" id="flow-canvas">
+            <div class="flow-stage" id="flow-stage">
+              <svg class="flow-edges" id="flow-edges" width="2000" height="2000"></svg>
+              <div class="flow-nodes" id="flow-nodes"></div>
+            </div>
+          </div>
+          <div class="legend">
+            <div><span class="line"></span> 父子层级</div>
+            <div><span class="line block"></span> 阻塞 (blocks)</div>
+            <div><span class="line blocked"></span> 被阻塞 (blocked_by)</div>
+            <div style="margin-top:8px;color:#94a3b8">拖节点移动 · 拖空白平移画布</div>
+          </div>
+          <div class="flow-controls">
+            <button type="button" id="zoom-in" title="放大">+</button>
+            <button type="button" id="zoom-out" title="缩小">−</button>
+            <button type="button" id="zoom-fit" title="适应画布">◎</button>
+            <button type="button" id="layout-reset" title="重新布局">↻</button>
+          </div>
+        </div>
+      </section>
+      <section class="view" id="view-rank">
+        <div class="rank-wrap">
+          <table><thead><tr><th>#</th><th>ID</th><th>标题</th><th>层级</th><th>分数</th><th>状态</th><th>父级</th></tr></thead><tbody id="rank-body"></tbody></table>
+        </div>
+      </section>
+      <section class="view" id="view-board">
+        <div class="board-wrap" id="board-wrap"></div>
+      </section>
+      <section class="view" id="view-calendar">
+        <div class="calendar-wrap">
+          <div class="cal-toolbar">
+            <button type="button" id="cal-prev">‹</button>
+            <h2 id="cal-title"></h2>
+            <button type="button" id="cal-next">›</button>
+            <button type="button" id="cal-today">今天</button>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+          <div class="cal-unscheduled">
+            <h3 id="cal-unsched-title">未排期</h3>
+            <ul id="cal-unsched-list"></ul>
+          </div>
+        </div>
+      </section>
+      <section class="view" id="view-decisions">
+        <div class="decisions-wrap">
+          <ul class="decision-list" id="decision-list"></ul>
+          <p class="order-note" id="order-note"></p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head">
+      <div><div class="mono" id="d-id"></div><h2 id="d-title"></h2></div>
+      <button class="drawer-close" id="drawer-close" type="button">×</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
+  <script>
+    const DATA = __DATA_JSON__;
+    const LEVEL_COLOR = { Epic: 'var(--epic)', Feature: 'var(--feature)', Story: 'var(--story)', Task: 'var(--task)' };
+    const BOARD_COLS = [
+      { key: 'ready', label: '可开工' },
+      { key: 'in-progress', label: '进行中' },
+      { key: 'intake', label: '待评估' },
+      { key: 'deferred', label: '暂缓' },
+      { key: 'done', label: '完成' },
+    ];
+
+    let filtered = [...DATA.items];
+    let selectedId = null;
+    const calNow = new Date();
+    let calYear = calNow.getFullYear();
+    let calMonth = calNow.getMonth();
+    const CAL_MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    let scale = 1;
+    let panX = 40;
+    let panY = 40;
+    let panning = false;
+    let panStart = null;
+    let nodeDrag = null;
+    const nodePositions = {};
+    const NODE_W = 260;
+    const NODE_H = 118;
+    const H_GAP = 36;
+    const V_GAP = 96;
+
+    function formatScore(v) {
+      const n = Number(v);
+      if (Number.isNaN(n)) return '—';
+      return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    }
+
+    function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; }
+    function levelBadge(l) { return badge('level-' + l, l); }
+    function statusBadge(s) { return badge('status-' + s, s); }
+
+    function parseParentLinks(raw) {
+      if (!raw || raw === '—') return [];
+      return raw.split(',').map(p => {
+        const m = p.trim().match(/^(RICE-[A-Z]+-\d+)(?::(\d+)%)?$/);
+        return m ? { id: m[1], pct: m[2] ? Number(m[2]) : 100 } : null;
+      }).filter(Boolean);
+    }
+
+    function parseIdList(raw) {
+      if (!raw || raw === '—') return [];
+      return [...raw.matchAll(/RICE-[A-Z]+-\d+/g)].map(m => m[0]);
+    }
+
+    function buildEdges(items) {
+      const edges = [];
+      items.forEach(item => {
+        parseParentLinks(item.parents).forEach(p => edges.push({ from: item.id, to: p.id, type: 'parent' }));
+        parseIdList(item.blocks).forEach(id => edges.push({ from: item.id, to: id, type: 'block' }));
+        parseIdList(item.blocked_by).forEach(id => edges.push({ from: id, to: item.id, type: 'blocked' }));
+      });
+      return edges;
+    }
+
+    function layoutNodes(items) {
+      const itemIds = new Set(items.map(i => i.id));
+      const childrenMap = {};
+      items.forEach(item => {
+        parseParentLinks(item.parents)
+          .map(p => p.id)
+          .filter(id => itemIds.has(id))
+          .forEach(parentId => {
+            (childrenMap[parentId] = childrenMap[parentId] || []).push(item.id);
+          });
+      });
+
+      const hasParent = new Set(Object.values(childrenMap).flat());
+      let roots = items.filter(i => !hasParent.has(i.id)).map(i => i.id);
+      if (!roots.length) roots = items.map(i => i.id);
+
+      const positions = {};
+      const placed = new Set();
+
+      function placeRow(ids, y, centerX) {
+        if (!ids.length) return;
+        const totalW = ids.length * NODE_W + Math.max(0, ids.length - 1) * H_GAP;
+        let x = centerX - totalW / 2;
+        ids.forEach(id => {
+          positions[id] = { x, y };
+          placed.add(id);
+          x += NODE_W + H_GAP;
+        });
+      }
+
+      const rootsSorted = roots
+        .map(id => items.find(i => i.id === id))
+        .filter(Boolean)
+        .sort((a, b) => b.rice - a.rice);
+      placeRow(rootsSorted.map(i => i.id), 48, 520);
+
+      let queue = [...rootsSorted.map(i => i.id)];
+      let depth = 1;
+      while (queue.length) {
+        const nextQueue = [];
+        queue.forEach(parentId => {
+          const kids = (childrenMap[parentId] || [])
+            .filter(id => !placed.has(id))
+            .sort((a, b) => {
+              const ia = items.find(i => i.id === a);
+              const ib = items.find(i => i.id === b);
+              return (ib?.rice || 0) - (ia?.rice || 0);
+            });
+          if (!kids.length || !positions[parentId]) return;
+          const centerX = positions[parentId].x + NODE_W / 2;
+          placeRow(kids, 48 + depth * (NODE_H + V_GAP), centerX);
+          nextQueue.push(...kids);
+        });
+        queue = nextQueue;
+        depth += 1;
+      }
+
+      const orphans = items.filter(i => !placed.has(i.id)).sort((a, b) => b.rice - a.rice);
+      if (orphans.length) {
+        placeRow(orphans.map(i => i.id), 48 + depth * (NODE_H + V_GAP), 520);
+      }
+      return positions;
+    }
+
+    function syncPositions(items) {
+      const auto = layoutNodes(items);
+      items.forEach(item => {
+        if (!nodePositions[item.id]) nodePositions[item.id] = { ...auto[item.id] };
+      });
+      Object.keys(nodePositions).forEach(id => {
+        if (!items.find(i => i.id === id)) delete nodePositions[id];
+      });
+      return nodePositions;
+    }
+
+    function getNodeCenter(id) {
+      const p = nodePositions[id];
+      return p ? { x: p.x + NODE_W / 2, y: p.y + NODE_H / 2 } : { x: 0, y: 0 };
+    }
+
+    function renderEdges(items) {
+      const edgesEl = document.getElementById('flow-edges');
+      const edges = buildEdges(items).filter(e => nodePositions[e.from] && nodePositions[e.to]);
+      const paths = edges.map(e => {
+        const a = nodePositions[e.from];
+        const b = nodePositions[e.to];
+        const x1 = a.x + NODE_W / 2;
+        const y1 = a.y + NODE_H;
+        const x2 = b.x + NODE_W / 2;
+        const y2 = b.y;
+        const cls = e.type === 'parent' ? 'edge-parent' : e.type === 'block' ? 'edge-block' : 'edge-blocked';
+        return `<path class="${cls}" d="${bezier(x1, y1, x2, y2)}"/>`;
+      }).join('');
+      edgesEl.innerHTML = paths + '<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/></marker></defs>';
+      edgesEl.querySelectorAll('path').forEach(p => p.setAttribute('marker-end', 'url(#arrow)'));
+    }
+
+    function updateNodeElement(el) {
+      const id = el.dataset.id;
+      const pos = nodePositions[id];
+      if (!pos) return;
+      el.style.left = pos.x + 'px';
+      el.style.top = pos.y + 'px';
+    }
+
+    function bindNodeDrag(el) {
+      el.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const id = el.dataset.id;
+        nodeDrag = {
+          id,
+          el,
+          pointerId: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          origX: nodePositions[id].x,
+          origY: nodePositions[id].y,
+          moved: false,
+        };
+        el.classList.add('dragging-node');
+        el.setPointerCapture(e.pointerId);
+      });
+      el.addEventListener('pointerup', e => {
+        if (!nodeDrag || nodeDrag.el !== el) return;
+        el.classList.remove('dragging-node');
+        el.releasePointerCapture(e.pointerId);
+        if (!nodeDrag.moved) openDrawer(el.dataset.id);
+        nodeDrag = null;
+      });
+      el.addEventListener('lostpointercapture', () => {
+        el.classList.remove('dragging-node');
+        nodeDrag = null;
+      });
+    }
+
+    function bezier(x1, y1, x2, y2) {
+      const dy = Math.abs(y2 - y1);
+      const c = Math.max(40, dy * 0.45);
+      return `M ${x1} ${y1} C ${x1} ${y1 + c}, ${x2} ${y2 - c}, ${x2} ${y2}`;
+    }
+
+    function renderFlow() {
+      const nodesEl = document.getElementById('flow-nodes');
+      syncPositions(filtered);
+
+      const existingIds = new Set([...nodesEl.querySelectorAll('.flow-node')].map(n => n.dataset.id));
+      const filteredIds = new Set(filtered.map(i => i.id));
+
+      filtered.forEach(item => {
+        let el = nodesEl.querySelector(`[data-id="${item.id}"]`);
+        const color = LEVEL_COLOR[item.level] || '#64748b';
+        if (!el) {
+          el = document.createElement('div');
+          el.className = 'flow-node';
+          el.dataset.id = item.id;
+          el.innerHTML = `
+            <div class="stripe" style="background:${color}"></div>
+            <span class="handle top"></span>
+            <div class="body">
+              <div class="id">${item.id}</div>
+              <h3>${item.title}</h3>
+              <div class="meta">${levelBadge(item.level)} ${statusBadge(item.status)}
+                <span class="rice">${formatScore(item.rice)}</span></div>
+            </div>
+            <span class="handle bottom"></span>`;
+          bindNodeDrag(el);
+          nodesEl.appendChild(el);
+        } else {
+          el.querySelector('.stripe').style.background = color;
+          el.querySelector('h3').textContent = item.title;
+          el.querySelector('.meta').innerHTML = `${levelBadge(item.level)} ${statusBadge(item.status)}
+            <span class="rice">${formatScore(item.rice)}</span>`;
+        }
+        el.classList.toggle('selected', selectedId === item.id);
+        updateNodeElement(el);
+      });
+
+      nodesEl.querySelectorAll('.flow-node').forEach(el => {
+        if (!filteredIds.has(el.dataset.id)) el.remove();
+      });
+
+      renderEdges(filtered);
+      applyTransform();
+    }
+
+    function fitView() {
+      const ids = filtered.map(i => i.id).filter(id => nodePositions[id]);
+      if (!ids.length) return;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      ids.forEach(id => {
+        const p = nodePositions[id];
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x + NODE_W);
+        maxY = Math.max(maxY, p.y + NODE_H);
+      });
+      const canvas = document.getElementById('flow-canvas');
+      const pad = 48;
+      const cw = canvas.clientWidth;
+      const ch = canvas.clientHeight;
+      const bw = maxX - minX + pad * 2;
+      const bh = maxY - minY + pad * 2;
+      scale = Math.min(1.4, Math.max(0.4, Math.min(cw / bw, ch / bh)));
+      panX = (cw - bw * scale) / 2 - minX * scale + pad * scale;
+      panY = (ch - bh * scale) / 2 - minY * scale + pad * scale;
+      applyTransform();
+    }
+
+    function resetLayout() {
+      filtered.forEach(item => delete nodePositions[item.id]);
+      renderFlow();
+      fitView();
+    }
+
+    function applyTransform() {
+      document.getElementById('flow-stage').style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+
+    function onPointerMove(e) {
+      if (nodeDrag) {
+        const dx = (e.clientX - nodeDrag.startX) / scale;
+        const dy = (e.clientY - nodeDrag.startY) / scale;
+        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) nodeDrag.moved = true;
+        nodePositions[nodeDrag.id].x = nodeDrag.origX + dx;
+        nodePositions[nodeDrag.id].y = nodeDrag.origY + dy;
+        updateNodeElement(nodeDrag.el);
+        renderEdges(filtered);
+        return;
+      }
+      if (!panning) return;
+      panX = e.clientX - panStart.x;
+      panY = e.clientY - panStart.y;
+      applyTransform();
+    }
+
+    function onPointerUp() {
+      panning = false;
+      document.getElementById('flow-canvas').classList.remove('dragging');
+    }
+
+    function renderRank() {
+      const sorted = [...filtered].sort((a, b) => b.rice - a.rice);
+      document.getElementById('rank-body').innerHTML = sorted.map((item, i) => `
+        <tr data-id="${item.id}" style="cursor:pointer">
+          <td>${i + 1}</td><td class="mono">${item.id}</td><td>${item.title}</td>
+          <td>${levelBadge(item.level)}</td><td><strong>${formatScore(item.rice)}</strong></td>
+          <td>${statusBadge(item.status)}</td><td>${item.parents}</td>
+        </tr>`).join('');
+      document.querySelectorAll('#rank-body tr').forEach(tr => tr.addEventListener('click', () => openDrawer(tr.dataset.id)));
+    }
+
+    function renderBoard() {
+      const wrap = document.getElementById('board-wrap');
+      wrap.innerHTML = BOARD_COLS.map(col => {
+        const cards = filtered.filter(i => i.status === col.key).sort((a, b) => b.rice - a.rice);
+        return `<div class="board-col"><h3>${col.label} <span class="count">${cards.length}</span></h3>
+          <div class="board-cards">${cards.map(item => `
+            <div class="board-card" data-id="${item.id}">
+              <div class="mono">${item.id}</div>
+              <div class="title">${item.title}</div>
+              <div>${levelBadge(item.level)} <span class="rice">分数 ${formatScore(item.rice)}</span></div>
+            </div>`).join('') || '<div style="color:var(--muted);font-size:0.85rem">无</div>'}
+          </div></div>`;
+      }).join('');
+      wrap.querySelectorAll('.board-card').forEach(el => el.addEventListener('click', () => openDrawer(el.dataset.id)));
+    }
+
+    function renderDecisions() {
+      const list = document.getElementById('decision-list');
+      list.innerHTML = (DATA.decisions || []).map(d => `<li>${d}</li>`).join('') || '<li>暂无决策记录</li>';
+      document.getElementById('order-note').textContent = DATA.implementationOrder || '';
+    }
+
+    function scheduleLabel(sch) {
+      if (!sch || sch.mode === 'none') return '未排期';
+      if (sch.mode === 'invalid') return `<span class="warn">排期无效：${sch.schedule_error || ''}</span>`;
+      if (sch.mode === 'milestone') return `截止 ${sch.end}`;
+      return `${sch.start} → ${sch.end}`;
+    }
+
+    function openDrawer(id) {
+      const item = DATA.items.find(i => i.id === id);
+      if (!item) return;
+      selectedId = id;
+      document.getElementById('d-id').textContent = item.id;
+      document.getElementById('d-title').textContent = item.title;
+      const skip = new Set(['Level', 'Status', 'Parent_links', 'Ledger_ref', 'Notes', 'Blocked_by', 'Blocks']);
+      const fields = Object.entries(item.fields).filter(([k]) => !skip.has(k));
+      const c = item.computed || {};
+      const contribs = (item.contributions || []).map(c => `${c.parent_id} ${c.pct}% → ${c.rice}`).join('<br>') || '—';
+      document.getElementById('drawer-body').innerHTML = `
+        <div style="margin-bottom:12px">${levelBadge(item.level)} ${statusBadge(item.status)}
+          <strong style="margin-left:8px;font-size:1.2rem">分数 ${formatScore(item.rice)}</strong></div>
+        <div class="computed-box">
+          <div><strong>计算</strong>（build 生成，不在 md 中）</div>
+          <div>Reach ${c.reach ?? '—'} · Impact ${c.impact ?? '—'}</div>
+          <div>RICE raw ${item.rice_raw ?? '—'} · norm ${item.rice_norm ?? '—'}</div>
+          <div>Effective RICE ${item.effective_rice ?? '—'}</div>
+          <div>排期 ${scheduleLabel(item.schedule)}</div>
+          <div style="margin-top:6px;font-size:0.8rem">Rollup：<br>${contribs}</div>
+        </div>
+        <div class="kv">
+          <span class="k">父级归因</span><span>${item.parents}</span>
+          <span class="k">阻塞</span><span>${item.blocks}</span>
+          <span class="k">被阻塞</span><span>${item.blocked_by}</span>
+          <span class="k">Ledger</span><span>${item.ledger_ref}</span>
+          ${fields.map(([k,v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}
+        </div>
+        ${item.notes ? `<div class="notes-box">${item.notes}</div>` : ''}`;
+      document.getElementById('drawer').classList.add('open');
+      document.getElementById('drawer-backdrop').classList.add('open');
+      renderFlow();
+    }
+
+    function parseIso(iso) {
+      const [y, m, d] = iso.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+
+    function isoDate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function scheduleOnDay(item, y, m, day) {
+      const sch = item.schedule;
+      if (!sch || sch.mode === 'none' || !sch.start || !sch.end) return false;
+      const cell = new Date(y, m, day);
+      const start = parseIso(sch.start);
+      const end = parseIso(sch.end);
+      return cell >= start && cell <= end;
+    }
+
+    function renderCalendar() {
+      document.getElementById('cal-title').textContent = `${calYear}年${CAL_MONTHS[calMonth]}`;
+      const grid = document.getElementById('cal-grid');
+      const dows = ['日','一','二','三','四','五','六'];
+      let html = dows.map(d => `<div class="cal-dow">${d}</div>`).join('');
+
+      const first = new Date(calYear, calMonth, 1);
+      const startPad = first.getDay();
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+      const prevDays = new Date(calYear, calMonth, 0).getDate();
+      const totalCells = Math.ceil((startPad + daysInMonth) / 7) * 7;
+      const todayIso = isoDate(new Date());
+
+      for (let i = 0; i < totalCells; i++) {
+        let y = calYear, m = calMonth, day;
+        let outside = false;
+        if (i < startPad) {
+          day = prevDays - startPad + i + 1;
+          m = calMonth - 1;
+          if (m < 0) { m = 11; y -= 1; }
+          outside = true;
+        } else if (i >= startPad + daysInMonth) {
+          day = i - startPad - daysInMonth + 1;
+          m = calMonth + 1;
+          if (m > 11) { m = 0; y += 1; }
+          outside = true;
+        } else {
+          day = i - startPad + 1;
+        }
+        const cellIso = isoDate(new Date(y, m, day));
+        const isToday = cellIso === todayIso;
+        const dayItems = filtered.filter(item => scheduleOnDay(item, y, m, day));
+        const chips = dayItems.map(item => {
+          const sch = item.schedule;
+          const invalid = sch && sch.mode === 'invalid';
+          const milestone = sch && sch.mode === 'milestone';
+          const color = LEVEL_COLOR[item.level] || '#64748b';
+          return `<span class="cal-chip${invalid ? ' invalid' : ''}${milestone ? ' milestone' : ''}" data-id="${item.id}" style="background:${invalid ? '#ef4444' : color}" title="${item.title}">${item.id.split('-').pop()} · ${formatScore(item.rice)}</span>`;
+        }).join('');
+        html += `<div class="cal-cell${outside ? ' outside' : ''}${isToday ? ' today' : ''}">
+          <div class="cal-day-num">${day}</div>${chips}</div>`;
+      }
+      grid.innerHTML = html;
+      grid.querySelectorAll('.cal-chip').forEach(el => el.addEventListener('click', () => openDrawer(el.dataset.id)));
+
+      const unsched = filtered.filter(i => !i.schedule || i.schedule.mode === 'none');
+      document.getElementById('cal-unsched-title').textContent = `未排期 (${unsched.length})`;
+      document.getElementById('cal-unsched-list').innerHTML = unsched.map(item =>
+        `<li data-id="${item.id}"><span class="mono">${item.id}</span> ${item.title} · 分数 ${formatScore(item.rice)}</li>`
+      ).join('') || '<li style="color:var(--muted)">无</li>';
+      document.getElementById('cal-unsched-list').querySelectorAll('li[data-id]').forEach(el =>
+        el.addEventListener('click', () => openDrawer(el.dataset.id)));
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawer').classList.remove('open');
+      document.getElementById('drawer-backdrop').classList.remove('open');
+    }
+
+    function applyFilters() {
+      const lv = document.getElementById('filter-level').value;
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      filtered = DATA.items.filter(i => {
+        if (lv && i.level !== lv) return false;
+        const blob = (i.id + ' ' + i.title + ' ' + (i.notes || '')).toLowerCase();
+        if (q && !blob.includes(q)) return false;
+        return true;
+      });
+      renderFlow();
+      renderRank();
+      renderBoard();
+      renderCalendar();
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('view-' + tab.dataset.view).classList.add('active');
+      });
+    });
+
+    const canvas = document.getElementById('flow-canvas');
+    canvas.addEventListener('pointerdown', e => {
+      if (e.target.closest('.flow-node')) return;
+      panning = true;
+      panStart = { x: e.clientX - panX, y: e.clientY - panY };
+      canvas.classList.add('dragging');
+    });
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.92 : 1.08;
+      scale = Math.min(2, Math.max(0.35, scale * delta));
+      applyTransform();
+    }, { passive: false });
+
+    document.getElementById('zoom-in').onclick = () => { scale = Math.min(2, scale * 1.15); applyTransform(); };
+    document.getElementById('zoom-out').onclick = () => { scale = Math.max(0.35, scale / 1.15); applyTransform(); };
+    document.getElementById('zoom-fit').onclick = fitView;
+    document.getElementById('layout-reset').onclick = resetLayout;
+    document.getElementById('filter-level').addEventListener('change', applyFilters);
+    document.getElementById('search').addEventListener('input', applyFilters);
+    document.getElementById('drawer-close').onclick = closeDrawer;
+    document.getElementById('drawer-backdrop').onclick = closeDrawer;
+    document.getElementById('cal-prev').onclick = () => {
+      calMonth -= 1;
+      if (calMonth < 0) { calMonth = 11; calYear -= 1; }
+      renderCalendar();
+    };
+    document.getElementById('cal-next').onclick = () => {
+      calMonth += 1;
+      if (calMonth > 11) { calMonth = 0; calYear += 1; }
+      renderCalendar();
+    };
+    document.getElementById('cal-today').onclick = () => {
+      const n = new Date();
+      calYear = n.getFullYear();
+      calMonth = n.getMonth();
+      renderCalendar();
+    };
+
+    renderDecisions();
+    applyFilters();
+    fitView();
+  </script>
+</body>
+</html>

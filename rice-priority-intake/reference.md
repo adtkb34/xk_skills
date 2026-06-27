@@ -1,0 +1,279 @@
+# RICE Priority Intake — Reference
+
+## Impact scale
+
+| Value | Label | Meaning |
+| --- | --- | --- |
+| 3 | Massive | Core workflow transformation; P0 risk reduction |
+| 2 | High | Major metric or daily-workflow improvement |
+| 1 | Medium | Clear value; noticeable but not transformative |
+| 0.5 | Low | Nice-to-have; edge cases |
+| 0.25 | Minimal | Polish, internal-only, tiny audience |
+
+## Confidence scale
+
+| % | When to use |
+| --- | --- |
+| 100 | Shipped similar work; data or prototype exists |
+| 80 | Strong product intuition; partial analogies |
+| 50 | Hypothesis; needs spike or user validation |
+
+## Reach guidance (material-demand-dashboard)
+
+| Audience | Typical reach / quarter |
+| --- | --- |
+| All planners (daily) | Active user count × ~60 working days |
+| Regional leads | Users in that region × weekly sessions |
+| Integration/backend | Downstream systems or batch jobs per month |
+| Admin/settings | % of users who open settings monthly |
+
+Use **events per quarter** when user count is unknown (e.g. "export runs", "risk alerts viewed").
+
+## Effort units
+
+| Level | Unit | Examples |
+| --- | --- | --- |
+| Epic | person-months | 3–12 |
+| Feature | person-weeks | 2–8 |
+| Story | person-days | 3–15 |
+| Task | person-days | 0.5–5 |
+
+Convert for formula: 1 person-month = 20 person-days; 1 person-week = 5 person-days.
+
+## Priority bands (sync to ledger)
+
+| RICE (Feature-level equivalent) | Suggested Priority |
+| --- | --- |
+| ≥ 50 | P0 candidate (confirm against ledger) |
+| 20 – 49 | P1 |
+| 5 – 19 | P2 |
+| < 5 | P3 / backlog |
+
+Feature RICE is the reference band. Scale Task RICE only for within-Task sorting unless attributed rollup elevates a parent.
+
+## Raw backlog schema
+
+**`priority-intake-backlog.md` stores human-editable inputs only.** `build_html.py` computes RICE, Score, Summary, calendar spans, rollup.
+
+### Allowed fields
+
+| Field | Root item | Child (`parent_links`) |
+| --- | --- | --- |
+| `Level`, `Status` | yes | yes |
+| `Reach`, `Impact` | yes | **no** (inherited) |
+| `Confidence`, `Effort` | yes | yes |
+| `impact_slice` | — | yes when siblings share parent |
+| `Parent_links` | optional | yes |
+| `start_date` / `end_date` | optional | optional |
+| `Blocks`, `Blocked_by`, `Ledger_ref`, `Notes` | yes | yes |
+
+### Forbidden in md
+
+`RICE`, `RICE_norm`, `Score`, `Effective_RICE`, `Reach_source`, `Impact_source`, `## Summary` table.
+
+### Schedule rules
+
+| Input | Effort | build calendar |
+| --- | --- | --- |
+| neither date | — | 未排期 |
+| `start_date` only | required | range: start … start+N−1 days |
+| `end_date` only | optional | milestone, or range if Effort set |
+| both dates | — | **invalid** |
+
+Dates: `YYYY-MM-DD`. Span uses **natural days** from parsed `Effort`.
+
+## Backlog file template
+
+```markdown
+# Priority Intake Backlog
+
+> 仅原始数据。排序 / 分数 / 日历请 build 后打开 .html
+
+## 已确认决策
+
+| # | 决策 |
+| --- | --- |
+| 1 | … |
+
+**实施顺序**：…
+
+## Items
+
+### RICE-STORY-001 — [Title]
+
+| Field | Value |
+| --- | --- |
+| Level | Story |
+| Status | ready |
+| Reach | 120 |
+| Impact | 2 |
+| Confidence | 80% |
+| Effort | 6 person-days |
+| Parent_links | — |
+| start_date | — |
+| end_date | — |
+| Blocks | — |
+| Blocked_by | — |
+| Ledger_ref | — |
+| Notes | … |
+
+---
+
+### RICE-TASK-NNN — [Title]
+
+| Field | Value |
+| --- | --- |
+| Level | Task |
+| Status | ready |
+| Confidence | 90% |
+| Effort | 2 person-days |
+| impact_slice | 0.4 |
+| Parent_links | RICE-STORY-001:100% |
+| start_date | 2026-07-01 |
+| end_date | — |
+| Blocks | — |
+| Blocked_by | — |
+| Ledger_ref | — |
+| Notes | … |
+
+---
+```
+
+## Row template (quick append — child Task)
+
+```markdown
+### RICE-TASK-NNN — Title
+
+| Field | Value |
+| --- | --- |
+| Level | Task |
+| Status | intake |
+| Confidence | 80% |
+| Effort | 3 person-days |
+| impact_slice | 0.4 |
+| Parent_links | RICE-STORY-001:100% |
+| start_date | — |
+| end_date | — |
+| Blocks | — |
+| Blocked_by | — |
+| Ledger_ref | — |
+| Notes | … |
+```
+
+## Attributed inheritance scoring
+
+When `parent_links` is non-empty, **do not** re-interview full Reach/Impact on the child. Derive from parents × attribution %, then compute RICE with child Confidence/Effort.
+
+| Scenario | Reach_c | Impact_c | impact_slice |
+| --- | --- | --- | --- |
+| Single parent 100% | `Reach(P) × 1` | `Impact(P) × 1 × slice` | 1 if only child; else Σ slice ≤ 1 across siblings |
+| Multi-parent Σai=100% | `Σ Reach(Pi) × ai%` | `Σ Impact(Pi) × ai% × slice` | Usually 1 (value split is in ai%) |
+| Sibling Tasks, same parent | Inherit parent Reach满额 | `Impact(P) × slice` per sibling | Σ slice ≤ 1 per parent |
+
+```
+function inherited_reach(child):
+  return sum(parent.reach * (pct / 100) for parent, pct in child.parent_links)
+
+function inherited_impact(child, impact_slice=1):
+  return sum(parent.impact * (pct / 100) * impact_slice
+             for parent, pct in child.parent_links)
+
+function score_child(child, impact_slice=1):
+  reach = inherited_reach(child)
+  impact = inherited_impact(child, impact_slice)
+  return rice(reach, impact, child.confidence, child.effort)
+```
+
+**Two layers of coefficients**
+
+1. **Scoring** — Reach/Impact inherited from each parent × `ai%` (and × `impact_slice` for siblings).
+2. **Rollup** — `contribution_rice(C → Pi) = RICE_c × (ai / 100)`.
+
+## Normalized priority score
+
+Display **`Score = RICE_norm × 100`** everywhere in Summary, HTML, and intake replies. Keep raw `RICE` in item detail for scheduling.
+
+```
+function rice_max_roots(items):
+  roots = [i for i in items if not i.parent_links]
+  return max(i.rice for i in roots) or 1
+
+function rice_norm(item, cache, items):
+  if item.id in cache: return cache[item.id]
+  if not item.parent_links:
+    n = item.rice / rice_max_roots(items)
+  else:
+    slice = item.impact_slice or 1
+    n = sum(rice_norm(parent, cache, items) * (pct/100) * slice
+            for parent, pct in item.parent_links)
+  cache[item.id] = n
+  return n
+
+function score_display(item):
+  return round(rice_norm(item) * 100, 1)
+```
+
+| Scenario | RICE_norm | Score | Child ≤ parent? |
+| --- | --- | --- | --- |
+| Root max raw = 32 | 32/32 = 1.0 | 100 | — |
+| Child slice 0.4 under parent norm 1 | 0.4 | 40 | Yes |
+| Siblings 0.4 + 0.35 + 0.25 | 0.4, 0.35, 0.25 | 40, 35, 25 | Each ≤ parent; Σ = 100 |
+
+**Sorting rules (updated)**
+
+1. **Summary / HTML / cross-layer**: `Score` descending.
+2. **Sibling Tasks (implementation order)**: raw `RICE` descending.
+3. **Epics/Features**: `parent_effective_rice` for audit; display `Score` at container level.
+4. **Tie-break** (within level): lower Effort, higher Confidence, fewer `blocked_by`.
+
+## Rollup algorithm
+
+```
+function rice(reach, impact, confidence_pct, effort):
+  return (reach * impact * (confidence_pct / 100)) / effort
+
+function score_item(item):
+  if item.parent_links is empty:
+    return rice(item.reach, item.impact, item.confidence, item.effort)
+  reach = inherited_reach(item)
+  impact = inherited_impact(item, item.impact_slice or 1)
+  return rice(reach, impact, item.confidence, item.effort)
+
+function contributions(child):
+  rice_c = score_item(child)
+  for each (parent, pct) in child.parent_links:
+    yield parent, rice_c * (pct / 100)
+
+function parent_effective_rice(parent):
+  direct = parent.own_rice or 0
+  from_children = sum(c for c in contributions(all_children_of parent))
+  return max(direct, from_children)
+```
+
+## Status lifecycle
+
+```
+intake → ready → in-progress → done
+              ↘ deferred
+```
+
+- `intake`: scored, not committed
+- `ready`: dependencies clear, can start
+- `deferred`: explicit user decision; keep score for re-evaluation
+
+## Anti-patterns
+
+| Anti-pattern | Fix |
+| --- | --- |
+| Double-counting effort on each parent | Effort once on leaf only |
+| 100% attribution to two parents | Splits must sum to 100% |
+| Child Task re-estimates same满额 Reach as parent | Inherit `Reach(P) × ai%` |
+| Sibling Tasks each inherit full parent Impact | Assign `impact_slice`; Σ slice ≤ 1 per parent |
+| Compare Task standalone RICE to Story standalone RICE | Use `Score` in Summary; raw RICE only within Task level |
+| Display raw RICE in Summary when children exist | Show `Score` (= norm×100); raw RICE in item detail |
+| Scoring every sub-task when parent is exploratory | Score parent Feature; children inherit Reach/Impact until split |
+| RICE replacing P0 ledger | P0 stands; RICE sequences work within constraints |
+| Writing Score/RICE/Summary into md | Raw md only; run build_html |
+| Child with Reach/Impact in md | Omit; build inherits from parent |
+| start_date + end_date both set | Pick one anchor only |
+| start_date without Effort | Invalid schedule in HTML |
