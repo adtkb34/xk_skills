@@ -53,7 +53,7 @@ Feature RICE is the reference band. Scale Task RICE only for within-Task sorting
 
 ## Raw backlog schema
 
-**`priority-intake-backlog.md`** holds decisions; **`priority-intake-backlog.items.csv`** holds item rows (human-editable inputs only). `build_html.py` computes RICE, Score, Summary, calendar spans, rollup.
+**`priority-intake-backlog.md`** holds decisions; **`priority-intake-backlog.items.csv`** holds item rows (human-editable inputs only); **`priority-intake-backlog.executions.csv`** holds schedule/execution rows (1:N via `task_id`). `build_html.py` computes RICE, Score, Summary, calendar spans, rollup.
 
 ### Allowed fields
 
@@ -64,23 +64,45 @@ Feature RICE is the reference band. Scale Task RICE only for within-Task sorting
 | `Confidence`, `Effort` | yes | yes |
 | `impact_slice` | — | yes when siblings share parent |
 | `Parent_links` | optional | yes |
-| `start_date` / `end_date` | optional | optional |
 | `Blocks`, `Blocked_by`, `Ledger_ref`, `Notes` | yes | yes |
+
+**排期不在 items 行** — 所有 `start_date` / `end_date` 只写在 `.executions.csv`。
 
 ### Forbidden in csv/md
 
 `RICE`, `RICE_norm`, `Score`, `Effective_RICE`, `Reach_source`, `Impact_source`, `## Summary` table.
 
-### Schedule rules
+### Schedule rules (executions only)
 
-| Input | Effort | build calendar |
+| Input | Linked task `effort` | build calendar |
 | --- | --- | --- |
 | neither date | — | 未排期 |
 | `start_date` only | required | range: start … start+N−1 days |
 | `end_date` only | optional | milestone, or range if Effort set |
 | both dates | — | **invalid** |
 
-Dates: `YYYY-MM-DD`. Span uses **natural days** from parsed `Effort`.
+Dates: `YYYY-MM-DD`. Span uses **natural days** from linked item's parsed `Effort`.
+
+### Executions schema
+
+**`priority-intake-backlog.executions.csv`** — one row per execution / schedule slot:
+
+```csv
+id,task_id,start_date,end_date,status,notes
+EXEC-001,RICE-TASK-005,2026-07-01,,pending,首次排期
+EXEC-002,RICE-TASK-005,2026-07-08,,pending,重试
+```
+
+| Column | Required | Notes |
+| --- | --- | --- |
+| `id` | yes | e.g. `EXEC-001` |
+| `task_id` | yes | Must match `id` in `.items.csv` |
+| `start_date` / `end_date` | optional | Set **only one**; span uses linked task's `effort` |
+| `status` | optional | `pending` \| `running` \| `success` \| `failed` \| `cancelled` (default `pending`) |
+| `notes` | optional | Free text |
+
+- One task → many execution rows (1:N).
+- Calendar shows all execution slots; unscheduled = task has no valid execution rows.
 
 ## Backlog file template
 
@@ -89,7 +111,7 @@ Dates: `YYYY-MM-DD`. Span uses **natural days** from parsed `Effort`.
 ```markdown
 # Priority Intake Backlog
 
-> 仅原始数据。Items 见同目录 `priority-intake-backlog.items.csv`；排序 / 分数 / 日历请 build 后打开 .html
+> 仅原始数据。Items 见同目录 `priority-intake-backlog.items.csv`；多次执行见 `priority-intake-backlog.executions.csv`；排序 / 分数 / 日历请 build 后打开 .html
 
 ## 已确认决策
 
@@ -103,9 +125,9 @@ Dates: `YYYY-MM-DD`. Span uses **natural days** from parsed `Effort`.
 **`priority-intake-backlog.items.csv`** — one row per item (UTF-8 with BOM for Excel):
 
 ```csv
-id,title,level,status,reach,impact,confidence,effort,impact_slice,parent_links,start_date,end_date,blocks,blocked_by,ledger_ref,notes
-RICE-STORY-001,Title,Story,ready,120,2,80%,6 person-days,,,,,,,,"Notes…"
-RICE-TASK-NNN,Child task,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,2026-07-01,,,,,"Notes…"
+id,title,level,status,reach,impact,confidence,effort,impact_slice,parent_links,blocks,blocked_by,ledger_ref,notes
+RICE-STORY-001,Title,Story,ready,120,2,80%,6 person-days,,,,,,"Notes…"
+RICE-TASK-NNN,Child task,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,,,,"Notes…"
 ```
 
 | Column | Root | Child (`parent_links`) |
@@ -115,15 +137,26 @@ RICE-TASK-NNN,Child task,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,
 | `confidence`, `effort` | yes | yes |
 | `impact_slice` | empty | yes when siblings share parent |
 | `parent_links` | empty | e.g. `RICE-STORY-001:100%` |
-| `start_date` / `end_date` | optional | optional (only one) |
 | `blocks`, `blocked_by`, `ledger_ref`, `notes` | optional | optional |
 
 Empty cell = not set. Quote `notes` when it contains commas.
 
+**`priority-intake-backlog.executions.csv`** — header only until first schedule:
+
+```csv
+id,task_id,start_date,end_date,status,notes
+```
+
 ## Row template (quick append — child Task CSV line)
 
 ```csv
-RICE-TASK-NNN,Title,Task,intake,,,80%,3 person-days,0.4,RICE-STORY-001:100%,,,,,,"Notes…"
+RICE-TASK-NNN,Title,Task,intake,,,80%,3 person-days,0.4,RICE-STORY-001:100%,,,,"Notes…"
+```
+
+## Row template (quick append — execution CSV line)
+
+```csv
+EXEC-NNN,RICE-TASK-NNN,2026-07-01,,pending,
 ```
 
 ## Attributed inheritance scoring
@@ -241,5 +274,6 @@ intake → ready → in-progress → done
 | RICE replacing P0 ledger | P0 stands; RICE sequences work within constraints |
 | Writing Score/RICE/Summary into md | Raw md only; run build_html |
 | Child with Reach/Impact in md | Omit; build inherits from parent |
-| start_date + end_date both set | Pick one anchor only |
-| start_date without Effort | Invalid schedule in HTML |
+| start_date + end_date both set on execution | Pick one anchor only |
+| start_date without linked task Effort | Invalid schedule in HTML |
+| start_date / end_date on item row | **Forbidden** — use `.executions.csv` |

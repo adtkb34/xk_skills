@@ -26,6 +26,7 @@ COMPUTED_MD_FIELDS = frozenset({
 })
 
 ITEMS_CSV_SUFFIX = ".items.csv"
+EXECUTIONS_CSV_SUFFIX = ".executions.csv"
 
 # CSV header (lowercase) → internal field key used by compute pipeline
 CSV_FIELD_MAP = {
@@ -37,8 +38,6 @@ CSV_FIELD_MAP = {
     "effort": "Effort",
     "impact_slice": "impact_slice",
     "parent_links": "Parent_links",
-    "start_date": "start_date",
-    "end_date": "end_date",
     "blocks": "Blocks",
     "blocked_by": "Blocked_by",
     "ledger_ref": "Ledger_ref",
@@ -48,6 +47,10 @@ CSV_FIELD_MAP = {
 
 def items_csv_path(md_path: Path) -> Path:
     return md_path.with_name(f"{md_path.stem}{ITEMS_CSV_SUFFIX}")
+
+
+def executions_csv_path(md_path: Path) -> Path:
+    return md_path.with_name(f"{md_path.stem}{EXECUTIONS_CSV_SUFFIX}")
 
 
 def normalize_cell(val: str | None) -> str:
@@ -86,6 +89,63 @@ def parse_items_csv(csv_path: Path) -> list[dict]:
             "fields": row_to_fields(row),
         })
     return items
+
+
+def parse_executions_csv(csv_path: Path) -> list[dict]:
+    text = csv_path.read_text(encoding="utf-8-sig")
+    reader = csv.DictReader(text.splitlines())
+    if not reader.fieldnames:
+        raise ValueError(f"CSV has no header row: {csv_path}")
+
+    executions: list[dict] = []
+    for row in reader:
+        ex_id = normalize_cell(row.get("id", ""))
+        task_id = normalize_cell(row.get("task_id", ""))
+        if not ex_id or not task_id:
+            continue
+        executions.append({
+            "id": ex_id,
+            "task_id": task_id,
+            "start_date": normalize_cell(row.get("start_date", "")),
+            "end_date": normalize_cell(row.get("end_date", "")),
+            "status": normalize_cell(row.get("status", "")) or "pending",
+            "notes": normalize_cell(row.get("notes", "")),
+        })
+    return executions
+
+
+def build_calendar_slots(item: dict) -> list[dict]:
+    slots: list[dict] = []
+    for ex in item.get("executions", []):
+        ex_sch = ex.get("schedule")
+        if ex_sch and ex_sch.get("mode") not in (None, "none"):
+            slots.append({
+                "slot_id": ex["id"],
+                "label": ex["id"].split("-")[-1],
+                "schedule": ex_sch,
+            })
+    return slots
+
+
+def attach_executions(items: list[dict], executions: list[dict]) -> None:
+    by_id = {item["id"]: item for item in items}
+    for item in items:
+        item["executions"] = []
+
+    for ex in executions:
+        task = by_id.get(ex["task_id"])
+        if not task:
+            continue
+        effort = task["fields"].get("Effort", "")
+        ex["schedule"] = resolve_schedule({
+            "start_date": ex.get("start_date", ""),
+            "end_date": ex.get("end_date", ""),
+            "Effort": effort,
+        })
+        task["executions"].append(ex)
+
+    for item in items:
+        item["calendar_slots"] = build_calendar_slots(item)
 
 
 def parse_markdown_table_row(line: str) -> tuple[str, str] | None:
@@ -371,8 +431,6 @@ def run_compute_pipeline(items: list[dict]) -> None:
     compute_rice(items)
     compute_norm_score(items)
     compute_rollup(items)
-    for item in items:
-        item["schedule"] = resolve_schedule(item["fields"])
 
 
 def parse_decisions_md(text: str) -> tuple[list[str], str]:
@@ -451,6 +509,11 @@ def parse_backlog(md_path: Path) -> dict:
         items = parse_items_md_legacy(text)
 
     run_compute_pipeline(items)
+
+    exec_path = executions_csv_path(md_path)
+    executions = parse_executions_csv(exec_path) if exec_path.is_file() else []
+    attach_executions(items, executions)
+
     summary_rows = build_summary(items)
 
     return {
@@ -493,11 +556,13 @@ def main() -> int:
     out = args.output or args.input.with_suffix(".html")
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     csv_path = items_csv_path(args.input)
-    source_label = (
-        f"{args.input.name} + {csv_path.name}"
-        if csv_path.is_file()
-        else args.input.name
-    )
+    exec_path = executions_csv_path(args.input)
+    source_parts = [args.input.name]
+    if csv_path.is_file():
+        source_parts.append(csv_path.name)
+    if exec_path.is_file():
+        source_parts.append(exec_path.name)
+    source_label = " + ".join(source_parts)
     out.write_text(render_html(data, Path(source_label), generated_at), encoding="utf-8")
     print(f"Wrote {out} ({len(data['items'])} items)")
     return 0

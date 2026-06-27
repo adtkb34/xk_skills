@@ -25,13 +25,20 @@
 | impact_slice | 0.4 — 前端入口与配置占 Story 价值约 40% |
 | Confidence | 90% — UI pattern exists |
 | Effort | 2 person-days |
-| start_date | 2026-07-01 |
 | Blocked by | — |
 
-### Raw CSV row (persisted)
+Schedule via `.executions.csv` (multiple runs):
 
 ```csv
-RICE-TASK-005,计划订单：前端入口/弹窗/配置,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,2026-07-01,,,,,"…"
+id,task_id,start_date,end_date,status,notes
+EXEC-005-1,RICE-TASK-005,2026-07-01,,pending,首轮开发
+EXEC-005-2,RICE-TASK-005,2026-07-08,,pending,联调重试
+```
+
+### Raw CSV row (persisted — item definition only)
+
+```csv
+RICE-TASK-005,计划订单：前端入口/弹窗/配置,Task,ready,,,90%,2 person-days,0.4,RICE-STORY-001:100%,,,,,,"…"
 ```
 
 ### After build_html (HTML only — not in md)
@@ -44,7 +51,7 @@ RICE_c   = (120 × 0.8 × 0.9) / 2 = 43.2
 contribution → STORY-001 = 43.2 × 100% = 43.2
 
 RICE_norm = 1.0 × 100% × 0.4 = 0.4 → Score = 40
-Calendar: 2026-07-01 → 2026-07-02 (2 person-days)
+Calendar: EXEC-005-1 → 2026-07-01 … 2026-07-02; EXEC-005-2 → 2026-07-08 … 2026-07-09 (2 person-days each)
 ```
 
 ### Why Task Score < Story Score

@@ -229,6 +229,14 @@
       padding: 12px; font-size: 0.86rem; margin-bottom: 16px; line-height: 1.55;
     }
     .computed-box .warn { color: #b45309; }
+    .executions-box {
+      background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px; font-size: 0.84rem; margin-bottom: 16px; line-height: 1.5;
+    }
+    .executions-box strong { display: block; margin-bottom: 8px; }
+    .exec-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .exec-table th, .exec-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .exec-table th { color: var(--muted); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -655,6 +663,23 @@
       return `${sch.start} → ${sch.end}`;
     }
 
+    function executionsHtml(item) {
+      const rows = item.executions || [];
+      const body = rows.length
+        ? rows.map(ex => `
+        <tr>
+          <td class="mono">${ex.id}</td>
+          <td>${scheduleLabel(ex.schedule)}</td>
+          <td>${ex.status || '—'}</td>
+          <td>${ex.notes || '—'}</td>
+        </tr>`).join('')
+        : '<tr><td colspan="4" style="color:var(--muted)">无 — 在 .executions.csv 添加行</td></tr>';
+      return `<div class="executions-box">
+        <strong>执行 / 排期</strong>（<code>.executions.csv</code>）
+        <table class="exec-table"><thead><tr><th>ID</th><th>排期</th><th>状态</th><th>备注</th></tr></thead><tbody>${body}</tbody></table>
+      </div>`;
+    }
+
     function openDrawer(id) {
       const item = DATA.items.find(i => i.id === id);
       if (!item) return;
@@ -673,9 +698,9 @@
           <div>Reach ${c.reach ?? '—'} · Impact ${c.impact ?? '—'}</div>
           <div>RICE raw ${item.rice_raw ?? '—'} · norm ${item.rice_norm ?? '—'}</div>
           <div>Effective RICE ${item.effective_rice ?? '—'}</div>
-          <div>排期 ${scheduleLabel(item.schedule)}</div>
           <div style="margin-top:6px;font-size:0.8rem">Rollup：<br>${contribs}</div>
         </div>
+        ${executionsHtml(item)}
         <div class="kv">
           <span class="k">父级归因</span><span>${item.parents}</span>
           <span class="k">阻塞</span><span>${item.blocks}</span>
@@ -701,13 +726,16 @@
       return `${y}-${m}-${day}`;
     }
 
-    function scheduleOnDay(item, y, m, day) {
-      const sch = item.schedule;
+    function slotOnDay(sch, y, m, day) {
       if (!sch || sch.mode === 'none' || !sch.start || !sch.end) return false;
       const cell = new Date(y, m, day);
       const start = parseIso(sch.start);
       const end = parseIso(sch.end);
       return cell >= start && cell <= end;
+    }
+
+    function scheduleOnDay(item, y, m, day) {
+      return (item.calendar_slots || []).some(slot => slotOnDay(slot.schedule, y, m, day));
     }
 
     function renderCalendar() {
@@ -741,13 +769,21 @@
         }
         const cellIso = isoDate(new Date(y, m, day));
         const isToday = cellIso === todayIso;
-        const dayItems = filtered.filter(item => scheduleOnDay(item, y, m, day));
-        const chips = dayItems.map(item => {
-          const sch = item.schedule;
+        const daySlots = [];
+        filtered.forEach(item => {
+          (item.calendar_slots || []).forEach(slot => {
+            if (slotOnDay(slot.schedule, y, m, day)) {
+              daySlots.push({ item, slot });
+            }
+          });
+        });
+        const chips = daySlots.map(({ item, slot }) => {
+          const sch = slot.schedule;
           const invalid = sch && sch.mode === 'invalid';
           const milestone = sch && sch.mode === 'milestone';
           const color = LEVEL_COLOR[item.level] || '#64748b';
-          return `<span class="cal-chip${invalid ? ' invalid' : ''}${milestone ? ' milestone' : ''}" data-id="${item.id}" style="background:${invalid ? '#ef4444' : color}" title="${item.title}">${item.id.split('-').pop()} · ${formatScore(item.rice)}</span>`;
+          const suffix = ` · ${slot.label}`;
+          return `<span class="cal-chip${invalid ? ' invalid' : ''}${milestone ? ' milestone' : ''}" data-id="${item.id}" style="background:${invalid ? '#ef4444' : color}" title="${item.title}${suffix}">${item.id.split('-').pop()}${suffix} · ${formatScore(item.rice)}</span>`;
         }).join('');
         html += `<div class="cal-cell${outside ? ' outside' : ''}${isToday ? ' today' : ''}">
           <div class="cal-day-num">${day}</div>${chips}</div>`;
@@ -755,7 +791,7 @@
       grid.innerHTML = html;
       grid.querySelectorAll('.cal-chip').forEach(el => el.addEventListener('click', () => openDrawer(el.dataset.id)));
 
-      const unsched = filtered.filter(i => !i.schedule || i.schedule.mode === 'none');
+      const unsched = filtered.filter(i => !(i.calendar_slots || []).length);
       document.getElementById('cal-unsched-title').textContent = `未排期 (${unsched.length})`;
       document.getElementById('cal-unsched-list').innerHTML = unsched.map(item =>
         `<li data-id="${item.id}"><span class="mono">${item.id}</span> ${item.title} · 分数 ${formatScore(item.rice)}</li>`
